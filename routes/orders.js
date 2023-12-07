@@ -122,4 +122,21 @@ router.get('/', function(req, res, next) {
 
 });
 
+
+
+router.get('/:orderId', function(req, res, next) {
+
+  let orderId = req.params.orderId;
+  let order = orders.find(order => order.orderId == orderId);
+
+  // Errors checking
+  if (order){
+    res.status(200).send(order);
+  }
+  else {
+    res.status(404).send({error: 'Order not found.'});
+  }
+
+});
+
 module.exports = router;
