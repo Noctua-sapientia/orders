@@ -187,6 +187,97 @@ router.post('/', function(req, res, next) {
 });
 
 
+// ---------------- PUT -----------------------
+router.put('/:orderId', function(req, res, next) {
+  let orderId = req.params.orderId;
+  let order = orders.find(order => order.orderId == orderId);
+
+  if (order) {
+    // Temporal object that stores the updates
+    let temporalOrder = {};
+
+    if (req.body.userId) {
+      temporalOrder.userId = req.body.userId;
+    }
+    if (req.body.sellerId) {
+      temporalOrder.sellerId = req.body.sellerId;
+    }
+    if (req.body.books) {
+      if (!(req.body.books.every(book => book.bookId && book.units && book.price))) {
+        return res.status(400).send({ error: "Order not updated. Missing required fields in books" });
+      }    
+      temporalOrder.books = req.body.books;
+    }
+    if (req.body.status) {
+      if (! ['In preparation', 'Sent', 'Delivered', 'Confirmed', 'Cancelled'].includes(req.body.status)) {
+        return res.status(400).send('Order not updated. Invalid status format');
+      }
+      temporalOrder.status = req.body.status;
+    }
+    if (req.body.deliveryAddress) {
+      temporalOrder.deliveryAddress = req.body.deliveryAddress;
+    }
+    if (req.body.maxDeliveryDate) {
+      if (!check_date_format(req.body.maxDeliveryDate)) {
+        return res.status(400).send('Order not updated. Invalid date format');
+      }
+      temporalOrder.maxDeliveryDate = new Date(req.body.maxDeliveryDate).toISOString();
+    }
+
+    if (req.body.payment) {
+      temporalOrder.payment = req.body.payment;
+    }
+    
+    temporalOrder.updateDatetime = new Date().toISOString();
+
+    // Apply all updates if no errors found
+    Object.assign(order, temporalOrder);
+
+    res.status(200).send({ message: `Order id=${orderId} updated successfully` });
+
+    // Si se cancela el pedido se debe de modificar el stock de los libros (comunicacion Libros --> Pedidos)
+    // Completar con llamada a microservicio de libros   
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+    // Si se completa un pedido se debe de modificar el numero de pedidos del vendedor (comunicacion Libros --> Usuarios)
+    // Completar con llamada a microservicio de usuarios 
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+  } else {
+    res.status(404).send({ error: "Order not found" });
+  }
+});
+
+
+router.put('/books/:bookId/cancelledRemove', function(req, res, next) {
+  const bookId = parseInt(req.params.bookId);
+  
+  let suppressions = 0;
+  orders.forEach(order => {
+    let order_booksIds = order.books.map(book => book.bookId);
+
+    if (order_booksIds.includes(bookId) && order.status === 'In preparation') {
+      if (order_booksIds === 1) {
+        order.status = 'Cancelled';
+        order.updateDatetime = new Date().toISOString();
+        suppressions++;
+      } else {
+        order.books = order.books.filter(book => book.bookId !== bookId);
+        order.updateDatetime = new Date().toISOString();
+        suppressions++;
+      }
+    }
+  });
+  
+  if (suppressions > 0) {
+    res.status(200).send(`Suppressed book id=${bookId} from ${suppressions} orders succesfully.`);
+  } else {
+    res.status(404).send(`No orders in progress for book id=${bookId}`);
+  }
+  
+}); 
+
+
 
 // ---------------- DELETE -----------------------
 
