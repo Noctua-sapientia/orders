@@ -300,6 +300,29 @@ router.put('/sellers/:sellerId/cancelled', function(req, res, next) {
   }
 });
 
+router.put('/users/:userId/cancelled', function(req, res, next) {
+  let userId = parseInt(req.params.userId);
+  
+  let cancelledOrders = 0;
+  orders.forEach(order => {
+    if (order.userId === userId && order.status === 'In preparation') {
+      order.status = 'Cancelled';
+      order.updateDatetime = new Date().toISOString();
+      cancelledOrders++;
+  
+      // Si se cancela el pedido se debe de modificar el stock de los libros (comunicacion Libros --> Pedidos)
+      // Completar con llamada a microservicio de libros   
+      // +++++++++++++++++++++++++++++++++++++++++++++++++++++
+    }
+  });
+  
+  if (cancelledOrders > 0) {
+    res.status(200).send(`Cancelled ${cancelledOrders} orders succesfully for user id=${userId}.`);
+  } else {
+    res.status(404).send(`No orders in progress for  user id=${userId}`);
+  }
+});
+
 
 
 
