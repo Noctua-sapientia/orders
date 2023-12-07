@@ -277,6 +277,31 @@ router.put('/books/:bookId/cancelledRemove', function(req, res, next) {
   
 }); 
 
+router.put('/sellers/:sellerId/cancelled', function(req, res, next) {
+  let sellerId = parseInt(req.params.sellerId);
+  
+  let cancelledOrders = 0;
+  orders.forEach(order => {
+    if (order.sellerId === sellerId && order.status === 'In preparation') {
+      order.status = 'Cancelled';
+      order.updateDatetime = new Date().toISOString();
+      cancelledOrders++;
+  
+      // Si se cancela el pedido se debe de modificar el stock de los libros (comunicacion Libros --> Pedidos)
+      // Completar con llamada a microservicio de libros   
+      // +++++++++++++++++++++++++++++++++++++++++++++++++++++
+    }
+  });
+  
+  if (cancelledOrders > 0) {
+    res.status(200).send(`Cancelled ${cancelledOrders} orders succesfully for seller id=${sellerId}.`);
+  } else {
+    res.status(404).send(`No orders in progress for  seller id=${sellerId}`);
+  }
+});
+
+
+
 
 
 // ---------------- DELETE -----------------------
