@@ -139,4 +139,51 @@ router.get('/:orderId', function(req, res, next) {
 
 });
 
+// ---------------- POST -----------------------
+
+router.post('/', function(req, res, next) {
+
+  // Check if required fields are provided
+  if (!(req.body.userId && req.body.sellerId && req.body.books && req.body.deliveryAddress && req.body.payment)) {
+    return res.status(400).send({ error: "Missing required fields" });
+  }
+
+  // Check if all the books fields are provided
+  if (!(req.body.books.every(book => book.bookId && book.units && book.price))) {
+    return res.status(400).send({ error: "Missing required fields in books" });
+  }
+
+
+
+  // Create object to push
+  let order = req.body;  // Add userId, sellerId, books, deliveryAddress, payment
+
+  let maxId = 0;
+  orders.forEach(order => {
+    if (order.orderId > maxId) {
+      maxId = order.orderId;
+    }});
+  order.orderId = maxId + 1;  // Add orderId
+
+  order.status = 'In preparation';  // Add status
+  order.creationDatetime = new Date().toISOString();  // Add creationDatetime
+  order.updateDatetime = new Date().toISOString();  // Add updateDatetime
+
+  let maxDeliveryDate = new Date(order.creationDatetime);  // Add max delivery date 
+  maxDeliveryDate.setDate(maxDeliveryDate.getDate() + 15);
+  order.maxDeliveryDate = maxDeliveryDate.toISOString().split('T')[0];
+
+  // Errors checking
+  try {
+    orders.push(order);
+    res.status(201).send({ message: `New order id=${order.orderId} created successfully`});
+  } 
+  catch (error) {
+    return res.status(500).send({ error: "An error occurred while creating the order" });
+  }
+  // Cuando se hace un pedido se debe de modificar el stock de los libros (comunicacion Libros --> Pedidos)
+  // Completar con llamada a microservicio de libros
+  // +++++++++++++++++++++++++++++++++++++++++++++++++++++
+});
+
 module.exports = router;
