@@ -186,4 +186,22 @@ router.post('/', function(req, res, next) {
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++
 });
 
+
+
+// ---------------- DELETE -----------------------
+
+router.delete('/:orderId', function(req, res, next) {
+
+  var orderId = req.params.orderId;
+  var order = orders.find(order => order.orderId == orderId);
+  if (order){
+    orders = orders.filter(order => order.orderId != orderId);
+    res.status(200).send({ message: `Order id=${orderId} deleted successfully`});
+  }
+  else {
+    res.status(404).send({ error: "Order not found" });
+  }
+
+});
+
 module.exports = router;
