@@ -323,6 +323,30 @@ router.put('/users/:userId/cancelled', function(req, res, next) {
   }
 });
 
+router.put('/user/:userid/deliveryAddress', function(req, res, next) {
+  let userId = parseInt(req.params.userId);
+  let newAddress = req.body.deliveryAddress;
+  
+  if (!newAddress) {
+    return res.status(400).send('Orders not updated. No new address provided');
+  }
+  
+  let updatedOrders = 0;
+  orders.forEach(order => {
+    if (order.userId === userId && order.status === 'In preparation') {
+      order.deliveryAddress = newAddress;
+      order.updateDatetime = new Date().toISOString();
+      updatedOrders++;
+    }
+  });
+  
+  if (updatedOrders > 0) {
+    res.status(200).send(`Delivery address updated on ${updatedOrders} orders for user id=${userId}.`);
+  } else {
+    res.status(404).send('No orders in progress for this user.');
+  }
+});
+
 
 
 
