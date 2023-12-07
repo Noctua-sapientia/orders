@@ -1,0 +1,13 @@
+build:
+  orders-service:
+    context: .
+
+deploy:
+  - helm upgrade --install orders-service chart 
+    --set orders.image=${OKTETO_BUILD_ORDERS_SERVICE_IMAGE}
+    
+dev:
+  orders-service:
+    command: npm start
+    sync: 
+      - .:/app
