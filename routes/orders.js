@@ -1,70 +1,20 @@
 var express = require('express');
 var router = express.Router();
-
-
-// ---------------- DATA MODEL -------------------
-let orders = [
-  {
-    'orderId': 1,
-    'userId': 1,
-
-    'sellerId': 2,
-    'books': [
-      { 'bookId': 2, 'units': 1, 'price': 6 },
-      { 'bookId': 1, 'units': 2, 'price': 5 },
-    ],
-    'status': 'In preparation',                                     // In preparation, Sent, Delivered, Confirmed, Cancelled
-
-    'deliveryAddress': '4 Privet Drive, Little Whinging, Surrey', // Harry Potter's address
-    
-    'maxDeliveryDate': '2023-12-25',
-    'creationDatetime': '2023-11-20T08:30:00',
-    'updateDatetime': '2023-11-21T09:45:00',
-    'payment': 16
-  },
-  {
-    'orderId': 2,
-    'userId': 1,
-
-    'sellerId': 1,
-    'books': [
-      { 'bookId': 3, 'units': 1, 'price': 10},
-      { 'bookId': 4, 'units': 2, 'price': 5},
-    ],
-    'status': 'Delivered',                                        
-
-    'deliveryAddress': '221B Baker Street, London',              // Sherlock Holmes' address
-    
-    'maxDeliveryDate': '2023-11-30',
-    'creationDatetime': '2023-11-15T10:00:00',
-    'updateDatetime': '2023-11-16T11:15:00',
-    'payment': 20
-  },
-  {
-    'orderId': 3,
-    'userId': 1,
-
-    'sellerId': 3,
-    'books':  [
-      { 'bookId': 5, 'units': 3, 'price': 7},
-    ],
-    'status': 'In preparation',
-
-    'deliveryAddress': '20-2 Yohga, Setagaya-ku, Tokyo',        // Katsuragi Misato's address (Neon Genesis Evangelion)
-    
-    'maxDeliveryDate': '2023-11-30',
-    'creationDatetime': '2023-11-15T11:00:00',
-    'updateDatetime': '2023-11-16T11:21:00',
-    'payment': 21
-  }
-]
-
+var Order = require('../models/order');
+var debug = require('debug')('orders-2:server');
 
 // ---------------- GET -----------------------
 
-router.get('/', function(req, res, next) {
+router.get('/', async function(req, res, next) {
 
-  let selectedOrders = orders;
+  let selectedOrders;
+  try {
+    selectedOrders = await Order.find();
+  }
+  catch (error) { 
+    debug("Database error", e);
+    return res.status(500).send({ error: "Database error" });
+  }
 
   // selected orders made by a certain user
   if (req.query.userId) {
@@ -117,21 +67,32 @@ router.get('/', function(req, res, next) {
     res.status(404).send({error: 'No orders found.'});
   }
   else {
-    res.status(200).send(selectedOrders);
+    res.status(200).send(selectedOrders.map(order => order.cleanup()));
   }
 
 });
 
 
 
-router.get('/:orderId', function(req, res, next) {
+router.get('/:orderId', async function(req, res, next) {
 
-  let orderId = req.params.orderId;
+  const orderId = req.params.orderId;
+  let orders;
+
+  try{
+    orders = await Order.find();
+  }
+  catch(e){
+    debug("Database error", e);
+    return res.status(500).send({ error: "Database error" });
+  }
+  
   let order = orders.find(order => order.orderId == orderId);
 
   // Errors checking
   if (order){
-    res.status(200).send(order);
+    res.status(200).send(order.cleanup());
+
   }
   else {
     res.status(404).send({error: 'Order not found.'});
@@ -139,9 +100,10 @@ router.get('/:orderId', function(req, res, next) {
 
 });
 
+
 // ---------------- POST -----------------------
 
-router.post('/', function(req, res, next) {
+router.post('/', async function(req, res, next) {
 
   // Check if required fields are provided
   if (!(req.body.userId && req.body.sellerId && req.body.books && req.body.deliveryAddress && req.body.payment)) {
@@ -153,10 +115,9 @@ router.post('/', function(req, res, next) {
     return res.status(400).send({ error: "Missing required fields in books" });
   }
 
-
-
   // Create object to push
-  let order = req.body;  // Add userId, sellerId, books, deliveryAddress, payment
+  let order = new Order(req.body);    // Add userId, sellerId, books, deliveryAddress, payment
+  let orders = await Order.find();
 
   let maxId = 0;
   orders.forEach(order => {
@@ -175,11 +136,16 @@ router.post('/', function(req, res, next) {
 
   // Errors checking
   try {
-    orders.push(order);
+    await order.save();
     res.status(201).send({ message: `New order id=${order.orderId} created successfully`});
-  } 
-  catch (error) {
-    return res.status(500).send({ error: "An error occurred while creating the order" });
+  } catch (error) {
+      if (error.errors){
+        return res.status(400).send({ error: error.errors });
+      }
+      else{
+        return res.status(500).send({ error: "An error occurred while creating the order" });
+      }
+    
   }
   // Cuando se hace un pedido se debe de modificar el stock de los libros (comunicacion Libros --> Pedidos)
   // Completar con llamada a microservicio de libros
@@ -188,8 +154,19 @@ router.post('/', function(req, res, next) {
 
 
 // ---------------- PUT -----------------------
-router.put('/:orderId', function(req, res, next) {
-  let orderId = req.params.orderId;
+router.put('/:orderId', async function(req, res, next) {
+  
+  const orderId = req.params.orderId;
+  let orders;
+
+  try{
+    orders = await Order.find();
+  }
+  catch(e){
+    debug("Database error", e);
+    return res.status(500).send({ error: "Database error" });
+  }
+  
   let order = orders.find(order => order.orderId == orderId);
 
   if (order) {
@@ -233,7 +210,18 @@ router.put('/:orderId', function(req, res, next) {
     // Apply all updates if no errors found
     Object.assign(order, temporalOrder);
 
-    res.status(200).send({ message: `Order id=${orderId} updated successfully` });
+    try {
+      await order.save();
+      res.status(200).send({ message: `Order id=${orderId} updated successfully` });
+    }
+    catch (error) {
+      if (error.errors){
+        return res.status(400).send({ error: error.errors });
+      }
+      else{
+        return res.status(500).send({ error: "An error occurred while updating the order" });
+      }
+    }
 
     // Si se cancela el pedido se debe de modificar el stock de los libros (comunicacion Libros --> Pedidos)
     // Completar con llamada a microservicio de libros   
@@ -249,122 +237,31 @@ router.put('/:orderId', function(req, res, next) {
 });
 
 
-router.put('/books/:bookId/cancelledRemove', function(req, res, next) {
-  const bookId = parseInt(req.params.bookId);
-  
-  let suppressions = 0;
-  orders.forEach(order => {
-    let order_booksIds = order.books.map(book => book.bookId);
-
-    if (order_booksIds.includes(bookId) && order.status === 'In preparation') {
-      if (order_booksIds === 1) {
-        order.status = 'Cancelled';
-        order.updateDatetime = new Date().toISOString();
-        suppressions++;
-      } else {
-        order.books = order.books.filter(book => book.bookId !== bookId);
-        order.updateDatetime = new Date().toISOString();
-        suppressions++;
-      }
-    }
-  });
-  
-  if (suppressions > 0) {
-    res.status(200).send(`Suppressed book id=${bookId} from ${suppressions} orders succesfully.`);
-  } else {
-    res.status(404).send(`No orders in progress for book id=${bookId}`);
-  }
-  
-}); 
-
-router.put('/sellers/:sellerId/cancelled', function(req, res, next) {
-  let sellerId = parseInt(req.params.sellerId);
-  
-  let cancelledOrders = 0;
-  orders.forEach(order => {
-    if (order.sellerId === sellerId && order.status === 'In preparation') {
-      order.status = 'Cancelled';
-      order.updateDatetime = new Date().toISOString();
-      cancelledOrders++;
-  
-      // Si se cancela el pedido se debe de modificar el stock de los libros (comunicacion Libros --> Pedidos)
-      // Completar con llamada a microservicio de libros   
-      // +++++++++++++++++++++++++++++++++++++++++++++++++++++
-    }
-  });
-  
-  if (cancelledOrders > 0) {
-    res.status(200).send(`Cancelled ${cancelledOrders} orders succesfully for seller id=${sellerId}.`);
-  } else {
-    res.status(404).send(`No orders in progress for  seller id=${sellerId}`);
-  }
-});
-
-router.put('/users/:userId/cancelled', function(req, res, next) {
-  let userId = parseInt(req.params.userId);
-  
-  let cancelledOrders = 0;
-  orders.forEach(order => {
-    if (order.userId === userId && order.status === 'In preparation') {
-      order.status = 'Cancelled';
-      order.updateDatetime = new Date().toISOString();
-      cancelledOrders++;
-  
-      // Si se cancela el pedido se debe de modificar el stock de los libros (comunicacion Libros --> Pedidos)
-      // Completar con llamada a microservicio de libros   
-      // +++++++++++++++++++++++++++++++++++++++++++++++++++++
-    }
-  });
-  
-  if (cancelledOrders > 0) {
-    res.status(200).send(`Cancelled ${cancelledOrders} orders succesfully for user id=${userId}.`);
-  } else {
-    res.status(404).send(`No orders in progress for  user id=${userId}`);
-  }
-});
-
-router.put('/user/:userid/deliveryAddress', function(req, res, next) {
-  let userId = parseInt(req.params.userId);
-  let newAddress = req.body.deliveryAddress;
-  
-  if (!newAddress) {
-    return res.status(400).send('Orders not updated. No new address provided');
-  }
-  
-  let updatedOrders = 0;
-  orders.forEach(order => {
-    if (order.userId === userId && order.status === 'In preparation') {
-      order.deliveryAddress = newAddress;
-      order.updateDatetime = new Date().toISOString();
-      updatedOrders++;
-    }
-  });
-  
-  if (updatedOrders > 0) {
-    res.status(200).send(`Delivery address updated on ${updatedOrders} orders for user id=${userId}.`);
-  } else {
-    res.status(404).send('No orders in progress for this user.');
-  }
-});
-
-
-
-
-
 // ---------------- DELETE -----------------------
 
-router.delete('/:orderId', function(req, res, next) {
+router.delete('/:orderId', async function(req, res, next) {
+  try {
+    // Eliminar el pedido por orderId
+    const result = await Order.deleteOne({ "orderId": req.params.orderId });
 
-  var orderId = req.params.orderId;
-  var order = orders.find(order => order.orderId == orderId);
-  if (order){
-    orders = orders.filter(order => order.orderId != orderId);
-    res.status(200).send({ message: `Order id=${orderId} deleted successfully`});
-  }
-  else {
-    res.status(404).send({ error: "Order not found" });
-  }
+    // Si no se eliminó ningún documento, significa que no se encontró el pedido
+    if (result.deletedCount === 0) {
+      return res.status(404).send({ error: 'Order not found' });
+    }
 
+    // Enviar una respuesta de éxito
+    res.status(200).send({ message: `Order id=${req.params.orderId} deleted successfully` });
+  } catch (error) {
+    // Manejar errores inesperados
+    return res.status(500).send({ error: 'An error occurred while deleting the order' });
+  }
 });
+
+// ---------------- AUXILIARY FUNCTIONS -----------------------
+
+function check_date_format(date) {
+  let date_regex = /^\d{4}-\d{2}-\d{2}$/;
+  return date_regex.test(date);
+}
 
 module.exports = router;

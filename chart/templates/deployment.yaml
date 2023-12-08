@@ -22,6 +22,12 @@ spec:
       containers:
         - name: orders
           image: {{ .Values.orders.image }}
+          env:
+            - name: DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb
+                  key: orders_db_url
           ports:
             - name: http
               containerPort: 3000

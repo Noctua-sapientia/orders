@@ -10,6 +10,7 @@ RUN npm install
 COPY bin/ ./bin
 COPY public/ ./public
 COPY routes/ ./routes
+COPY models/ ./models
 COPY app.js .
 
 EXPOSE 3000
