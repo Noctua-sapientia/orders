@@ -4,7 +4,66 @@ var Order = require('../models/order');
 var debug = require('debug')('orders-2:server');
 
 // ---------------- GET -----------------------
-
+// GET /orders :: Gives all books and allows to filter with certain criteria
+/**
+ * @openapi
+ * /api/v1/orders:
+ *   get:
+ *     tags:
+ *       - Orders
+ *     description: Request all orders allowing filters based on different criteria
+ *     parameters:
+ *       - in: query
+ *         name: userId
+ *         required: false
+ *         description: User ID to filter orders.
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: sellerId
+ *         required: false
+ *         description: Seller ID to filter orders.
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: status
+ *         required: false
+ *         description: Status to filter orders.
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: bookId
+ *         required: false
+ *         description: Book ID to filter orders.
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: minPayment
+ *         required: false
+ *         description: Minimum payment to filter orders.
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: maxPayment
+ *         required: false
+ *         description: Minimum payment to filter orders.
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: sort
+ *         required: false
+ *         description: Sorting criteria (creationDate, updateDatetime, maxDeliveryDate, payment).
+ *         schema:
+ *           type: string
+ * 
+ *     responses:
+ *       200:
+ *         description: Filtered orders returned successfully.
+ *       404:
+ *         description: No orders found.
+ *       500:
+ *        description: Database error.
+ */
 router.get('/', async function(req, res, next) {
 
   let selectedOrders;
@@ -73,7 +132,29 @@ router.get('/', async function(req, res, next) {
 });
 
 
-
+// GET /orders/{orderId} :: Request one order by id 
+/**
+ * @openapi
+ * /api/v1/orders/{orderId}:
+ *   get:
+ *     tags:
+ *       - Orders
+ *     description: Request one order by its ID
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         description: Numeric ID of the order to get.
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Order data returned successfully.
+ *       404:
+ *         description: Not found.
+ *       500:
+ *         description: Database error.
+ */
 router.get('/:orderId', async function(req, res, next) {
 
   const orderId = req.params.orderId;
@@ -103,21 +184,74 @@ router.get('/:orderId', async function(req, res, next) {
 
 // ---------------- POST -----------------------
 
+// POST /orders :: Create a new order
+/**
+* @openapi
+* /api/v1/orders:
+*   post:
+*     tags:
+*       - Orders
+*     description: Create a new order.
+*     requestBody:
+*       required: true
+*       content:
+*         application/json:
+*           schema:
+*             type: object
+*             properties:
+*               userId:
+*                 type: integer
+*               sellerId:
+*                 type: integer
+*               books:
+*                 type: array
+*                 items:
+*                   type: object
+*                   properties:
+*                     bookId:
+*                       type: integer
+*                     units:
+*                       type: integer
+*                     price:
+*                       type: integer
+*                   required:
+*                     - bookId
+*                     - units
+*               deliveryAddress:
+*                 type: string
+*               maxDeliveryDate:
+*                 type: string
+*                 format: date format: YYYY-MM-DD
+*               payment:
+*                 type: number
+*     responses:
+*       201:
+*         description: New order created successfully.
+*       400:
+*         description: Missing required fields. / Missing required fields in books. / Invalid date format.
+*       500:
+*         description: Database error.
+*/
 router.post('/', async function(req, res, next) {
 
   // Check if required fields are provided
   if (!(req.body.userId && req.body.sellerId && req.body.books && req.body.deliveryAddress && req.body.payment)) {
-    return res.status(400).send({ error: "Missing required fields" });
+    return res.status(400).send({ error: "Order not posted. Missing required fields" });
   }
 
   // Check if all the books fields are provided
   if (!(req.body.books.every(book => book.bookId && book.units && book.price))) {
-    return res.status(400).send({ error: "Missing required fields in books" });
+    return res.status(400).send({ error: "Order not posted. Missing required fields in books" });
   }
 
-  // Create object to push
-  let order = new Order(req.body);    // Add userId, sellerId, books, deliveryAddress, payment
   let orders = await Order.find();
+
+  let order = new Order();              // Create object to push
+  order.userId = req.body.userId;       // Add userId, sellerId, books, deliveryAddress, payment  
+  order.sellerId = req.body.sellerId;
+  order.books = req.body.books;
+  order.deliveryAddress = req.body.deliveryAddress;
+  order.payment = req.body.payment;
 
   let maxId = 0;
   orders.forEach(order => {
@@ -130,9 +264,10 @@ router.post('/', async function(req, res, next) {
   order.creationDatetime = new Date().toISOString();  // Add creationDatetime
   order.updateDatetime = new Date().toISOString();  // Add updateDatetime
 
-  let maxDeliveryDate = new Date(order.creationDatetime);  // Add max delivery date 
-  maxDeliveryDate.setDate(maxDeliveryDate.getDate() + 15);
-  order.maxDeliveryDate = maxDeliveryDate.toISOString().split('T')[0];
+  if (!check_date_format(req.body.maxDeliveryDate)) {
+    return res.status(400).send({error: 'Order not posted. Invalid date format (format: YYYY-MM-DD)'});
+  }
+  order.maxDeliveryDate = new Date(req.body.maxDeliveryDate);  // Add maxDeliveryDate
 
   // Errors checking
   try {
@@ -143,7 +278,7 @@ router.post('/', async function(req, res, next) {
         return res.status(400).send({ error: error.errors });
       }
       else{
-        return res.status(500).send({ error: "An error occurred while creating the order" });
+        return res.status(500).send({ error: "Database error" });
       }
     
   }
@@ -154,6 +289,66 @@ router.post('/', async function(req, res, next) {
 
 
 // ---------------- PUT -----------------------
+
+// PUT /orders/{orderId} :: Update an order
+/**
+* @openapi
+* /api/v1/orders/{orderId}:
+*   put:
+*     tags:
+*        - Orders
+*     description: Update an existing order.
+*     parameters:
+*       - in: path
+*         name: orderId
+*         required: true
+*         description: Numeric ID of the order to update.
+*         schema:
+*           type: integer
+*     requestBody:
+*       required: true
+*       content:
+*         application/json:
+*           schema:
+*             type: object
+*             properties:
+*               userId:
+*                 type: integer
+*               sellerId:
+*                 type: integer
+*               books:
+*                 type: array
+*                 items:
+*                   type: object
+*                   properties:
+*                     bookId:
+*                       type: integer
+*                     units:
+*                       type: integer
+*                     price:
+*                       type: integer
+*                   required:
+*                     - bookId
+*                     - units
+*               status:
+*                 type: string
+*               deliveryAddress:
+*                type: string
+*               maxDeliveryDate:
+*                 type: string
+*                 format: date format: YYYY-MM-DD
+*               payment:
+*                 type: number
+*     responses:
+*       200:
+*         description: Order updated successfully.
+*       400:
+*         description: Order not updated. Invalid status format. / Missing required fields in books.
+*       404:
+*         description: Order not found.
+*       500:
+*         description: Database error.
+*/
 router.put('/:orderId', async function(req, res, next) {
   
   const orderId = req.params.orderId;
@@ -239,21 +434,40 @@ router.put('/:orderId', async function(req, res, next) {
 
 // ---------------- DELETE -----------------------
 
+// DELETE /orders/{orderId} :: Delete an order
+/**
+* @openapi
+* /api/v1/orders/{orderId}:
+*   delete:
+*     tags:
+*      - Orders
+*     description: Delete a specific order by its id.
+*     parameters:
+*       - in: path
+*         name: orderId
+*         required: true
+*         description: Numeric ID of the order to delete.
+*         schema:
+*           type: integer
+*     responses:
+*       200:
+*         description: Order deleted successfully.
+*       404:
+*         description: Order not found.
+*       500:
+*         description: Database error.
+*/
 router.delete('/:orderId', async function(req, res, next) {
   try {
-    // Eliminar el pedido por orderId
     const result = await Order.deleteOne({ "orderId": req.params.orderId });
 
-    // Si no se eliminó ningún documento, significa que no se encontró el pedido
     if (result.deletedCount === 0) {
       return res.status(404).send({ error: 'Order not found' });
     }
 
-    // Enviar una respuesta de éxito
     res.status(200).send({ message: `Order id=${req.params.orderId} deleted successfully` });
   } catch (error) {
-    // Manejar errores inesperados
-    return res.status(500).send({ error: 'An error occurred while deleting the order' });
+    return res.status(500).send({ error: 'Database error.' });
   }
 });
 
