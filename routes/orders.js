@@ -4,7 +4,66 @@ var Order = require('../models/order');
 var debug = require('debug')('orders-2:server');
 
 // ---------------- GET -----------------------
-
+// GET /orders :: Gives all books and allows to filter with certain criteria
+/**
+ * @openapi
+ * /api/v1/orders:
+ *   get:
+ *     tags:
+ *       - Orders
+ *     description: Request all orders allowing filters based on different criteria
+ *     parameters:
+ *       - in: query
+ *         name: userId
+ *         required: false
+ *         description: User ID to filter orders.
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: sellerId
+ *         required: false
+ *         description: Seller ID to filter orders.
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: status
+ *         required: false
+ *         description: Status to filter orders.
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: bookId
+ *         required: false
+ *         description: Book ID to filter orders.
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: minPayment
+ *         required: false
+ *         description: Minimum payment to filter orders.
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: maxPayment
+ *         required: false
+ *         description: Minimum payment to filter orders.
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: sort
+ *         required: false
+ *         description: Sorting criteria (creationDate, updateDatetime, maxDeliveryDate, payment).
+ *         schema:
+ *           type: string
+ * 
+ *     responses:
+ *       200:
+ *         description: Filtered orders returned successfully.
+ *       404:
+ *         description: No orders found.
+ *       500:
+ *        description: Database error.
+ */
 router.get('/', async function(req, res, next) {
 
   let selectedOrders;
@@ -73,7 +132,29 @@ router.get('/', async function(req, res, next) {
 });
 
 
-
+// GET /orders/{orderId} :: Request one order by id 
+/**
+ * @openapi
+ * /api/v1/orders/{orderId}:
+ *   get:
+ *     tags:
+ *       - Orders
+ *     description: Request one order by its ID
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         description: Numeric ID of the order to get.
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Order data returned successfully.
+ *       404:
+ *         description: Not found.
+ *       500:
+ *         description: Database error.
+ */
 router.get('/:orderId', async function(req, res, next) {
 
   const orderId = req.params.orderId;
