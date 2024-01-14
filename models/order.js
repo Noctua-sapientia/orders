@@ -49,7 +49,7 @@ const orderSchema = new mongoose.Schema({
         type: Date,
         required: true,
     },
-    payment: {
+    shippingCost: {
         type: Number,
         required: true,
     }
@@ -66,7 +66,7 @@ orderSchema.methods.cleanup = function() {
         maxDeliveryDate: this.maxDeliveryDate,
         creationDatetime: this.creationDatetime,
         updateDatetime: this.updateDatetime,
-        payment: this.payment
+        shippingCost: this.shippingCost
     };
 }
 

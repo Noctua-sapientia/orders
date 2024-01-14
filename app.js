@@ -8,6 +8,8 @@ var ordersRouter = require('./routes/orders');
 
 var app = express();
 
+require('dotenv').config();
+
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));

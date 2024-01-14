@@ -110,8 +110,20 @@ router.get('/', async function(req, res, next) {
     selectedOrders = selectedOrders.sort((a, b) => (a.maxDeliveryDate > b.maxDeliveryDate) ? 1 : -1);
   }
 
-  if (req.query.sort == 'payment') {
-    selectedOrders = selectedOrders.sort((a, b) => (a.payment > b.payment) ? 1 : -1);
+  if (req.query.sort == 'shippingCost') {
+    selectedOrders = selectedOrders.sort((a, b) => (a.shippingCost > b.shippingCost) ? 1 : -1);
+  }
+
+  // selected orders sorted by total price
+
+  selectedOrders = selectedOrders.map(order => {
+    let totalBooksPrice = order.books.reduce((sum, book) => sum + (book.price * book.units), 0);
+    order.totalPrice = totalBooksPrice + order.shippingCost;
+    return order;
+  });
+
+  if (req.query.sort == 'price') {
+    selectedOrders.sort((a, b) => a.totalPrice - b.totalPrice);
   }
 
   // selected orders in a payment range minPayment-maxPayment
@@ -121,6 +133,14 @@ router.get('/', async function(req, res, next) {
     );
   }
 
+  // selected orders in a total price range minPrice-maxPrice
+  if (req.query.minPrice && req.query.maxPrice) {
+    selectedOrders = selectedOrders.filter(order => 
+      order.totalPrice >= req.query.minPrice && order.totalPrice <= req.query.maxPrice
+    );
+  }
+
+
   // Errors checking
   if (selectedOrders.length == 0) {
     res.status(404).send({error: 'No orders found.'});
@@ -129,6 +149,65 @@ router.get('/', async function(req, res, next) {
     res.status(200).send(selectedOrders.map(order => order.cleanup()));
   }
 
+});
+
+
+// GET /orders/price/{orderId} :: Request total price of an order by its ID
+/**
+ * @openapi
+ * /api/v1/orders/price/{orderId}:
+ *   get:
+ *     tags:
+ *       - Orders
+ *     description: Request the total price of an order by its ID.
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         description: Numeric ID of the order for which the total price is requested.
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Total price of the order returned successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 orderId:
+ *                   type: integer
+ *                 totalPrice:
+ *                   type: number
+ *                   format: float
+ *                   description: Total price of the order including the price of books and shipping cost.
+ *       404:
+ *         description: Order not found.
+ *       500:
+ *         description: Database error.
+ */
+router.get('/price/:orderId', async function(req, res, next) {
+  const orderId = parseInt(req.params.orderId);
+  let orders;
+
+  try {
+    orders = await Order.find();
+  }
+  catch (error) {
+    debug("Database error", error);
+    return res.status(500).send({ error: "Database error" });
+  }
+
+  let order = orders.find(order => order.orderId === orderId);
+
+  if (order) {
+    let totalBooksPrice = order.books.reduce((sum, book) => sum + (book.price * book.units), 0);
+    let totalPrice = totalBooksPrice + order.shippingCost;
+    
+    res.status(200).send({ orderId: orderId, totalPrice: totalPrice });
+  } else {
+    res.status(404).send({ error: 'Order not found.' });
+  }
 });
 
 
@@ -235,7 +314,7 @@ router.get('/:orderId', async function(req, res, next) {
 router.post('/', async function(req, res, next) {
 
   // Check if required fields are provided
-  if (!(req.body.userId && req.body.sellerId && req.body.books && req.body.deliveryAddress && req.body.payment)) {
+  if (!(req.body.userId && req.body.sellerId && req.body.books && req.body.deliveryAddress && req.body.shippingCost)) {
     return res.status(400).send({ error: "Order not posted. Missing required fields" });
   }
 
@@ -251,7 +330,7 @@ router.post('/', async function(req, res, next) {
   order.sellerId = req.body.sellerId;
   order.books = req.body.books;
   order.deliveryAddress = req.body.deliveryAddress;
-  order.payment = req.body.payment;
+  order.shippingCost = req.body.shippingCost;
 
   let maxId = 0;
   orders.forEach(order => {
@@ -432,6 +511,211 @@ router.put('/:orderId', async function(req, res, next) {
 });
 
 
+/**
+ * @openapi
+ * /api/v1/orders/books/{bookId}/cancelledRemove:
+ *   put:
+ *     tags:
+ *       - Orders
+ *     description: Remove a book from all orders or cancel the order if it only contains that book.
+ *     parameters:
+ *       - in: path
+ *         name: bookId
+ *         required: true
+ *         description: Numeric ID of the book to be removed from orders.
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Book removed from orders or orders cancelled successfully.
+ *       404:
+ *         description: No orders in progress for the specified book.
+ *       500:
+ *         description: Database error.
+ */
+router.put('/books/:bookId/cancelledRemove', async function(req, res, next) {
+  const bookId = parseInt(req.params.bookId);
+  let suppressions = 0;
+
+  try {
+    // Encuentra órdenes con el libro y estado 'In preparation'
+    let orders = await Order.find({ "books.bookId": bookId, status: 'In preparation' });
+
+    for (let order of orders) {
+      if (order.books.length === 1 && order.books[0].bookId === bookId) {
+        // Si el pedido solo contiene ese libro, cancela el pedido
+        order.status = 'Cancelled';
+      } else {
+        // Si no, elimina el libro del pedido
+        order.books = order.books.filter(book => book.bookId !== bookId);
+      }
+      order.updateDatetime = new Date().toISOString();
+      await order.save();
+      suppressions++;
+    }
+
+    if (suppressions > 0) {
+      res.status(200).send(`Suppressed book id=${bookId} from ${suppressions} orders successfully.`);
+    } else {
+      res.status(404).send(`No orders in progress for book id=${bookId}`);
+    }
+  } catch (error) {
+    debug("Database error", error);
+    return res.status(500).send({ error: "Database error" });
+  }
+});
+
+
+/**
+ * @openapi
+ * /api/v1/orders/sellers/{sellerId}/cancelled:
+ *   put:
+ *     tags:
+ *       - Orders
+ *     description: Cancel all orders in preparation for a specific seller.
+ *     parameters:
+ *       - in: path
+ *         name: sellerId
+ *         required: true
+ *         description: Numeric ID of the seller whose orders need to be cancelled.
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: All orders in preparation for the specified seller cancelled successfully.
+ *       404:
+ *         description: No orders in progress for the specified seller.
+ *       500:
+ *         description: Database error.
+ */
+router.put('/sellers/:sellerId/cancelled', async function(req, res, next) {
+  const sellerId = parseInt(req.params.sellerId);
+
+  try {
+    // Actualizar el estado de las órdenes a 'Cancelled'
+    const updateResult = await Order.updateMany(
+      { sellerId: sellerId, status: 'In preparation' },
+      { $set: { status: 'Cancelled', updateDatetime: new Date().toISOString() } }
+    );
+
+    if (updateResult.matchedCount > 0) {
+      res.status(200).send(`Cancelled ${updateResult.modifiedCount} orders successfully for seller id=${sellerId}.`);
+    } else {
+      res.status(404).send(`No orders in progress for seller id=${sellerId}`);
+    }
+  } catch (error) {
+    debug("Database error", error);
+    return res.status(500).send({ error: "Database error" });
+  }
+});
+
+
+/**
+ * @openapi
+ * /api/v1/orders/users/{userId}/cancelled:
+ *   put:
+ *     tags:
+ *       - Orders
+ *     description: Cancel all orders in preparation for a specific user.
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         description: Numeric ID of the user whose orders need to be cancelled.
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: All orders in preparation for the specified user cancelled successfully.
+ *       404:
+ *         description: No orders in progress for the specified user.
+ *       500:
+ *         description: Database error.
+ */
+router.put('/users/:userId/cancelled', async function(req, res, next) {
+  const userId = parseInt(req.params.userId);
+
+  try {
+    // Actualizar el estado de las órdenes a 'Cancelled'
+    const updateResult = await Order.updateMany(
+      { userId: userId, status: 'In preparation' },
+      { $set: { status: 'Cancelled', updateDatetime: new Date().toISOString() } }
+    );
+
+    if (updateResult.matchedCount > 0) {
+      res.status(200).send(`Cancelled ${updateResult.modifiedCount} orders successfully for user id=${userId}.`);
+    } else {
+      res.status(404).send(`No orders in progress for user id=${userId}`);
+    }
+  } catch (error) {
+    debug("Database error", error);
+    return res.status(500).send({ error: "Database error" });
+  }
+});
+
+
+
+/**
+ * @openapi
+ * /api/v1/orders/user/{userid}/deliveryAddress:
+ *   put:
+ *     tags:
+ *       - Orders
+ *     description: Update the delivery address for all orders in preparation for a specific user.
+ *     parameters:
+ *       - in: path
+ *         name: userid
+ *         required: true
+ *         description: Numeric ID of the user whose delivery address needs to be updated.
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               deliveryAddress:
+ *                 type: string
+ *                 description: New delivery address to update.
+ *     responses:
+ *       200:
+ *         description: Delivery address updated on all orders in preparation for the specified user.
+ *       400:
+ *         description: Orders not updated. No new address provided.
+ *       404:
+ *         description: No orders in progress for the specified user.
+ *       500:
+ *         description: Database error.
+ */
+router.put('/user/:userId/deliveryAddress', async function(req, res, next) {
+  const userId = parseInt(req.params.userId);
+  const newAddress = req.body.deliveryAddress;
+
+  if (!newAddress) {
+    return res.status(400).send('Orders not updated. No new address provided');
+  }
+
+  try {
+    // Actualizar la dirección de entrega de las órdenes
+    const updateResult = await Order.updateMany(
+      { userId: userId, status: 'In preparation' },
+      { $set: { deliveryAddress: newAddress, updateDatetime: new Date().toISOString() } }
+    );
+
+    if (updateResult.matchedCount > 0) {
+      res.status(200).send(`Delivery address updated on ${updateResult.modifiedCount} orders for user id=${userId}.`);
+    } else {
+      res.status(404).send('No orders in progress for this user.');
+    }
+  } catch (error) {
+    debug("Database error", error);
+    return res.status(500).send({ error: "Database error" });
+  }
+});
+
+
 // ---------------- DELETE -----------------------
 
 // DELETE /orders/{orderId} :: Delete an order
@@ -470,6 +754,7 @@ router.delete('/:orderId', async function(req, res, next) {
     return res.status(500).send({ error: 'Database error.' });
   }
 });
+
 
 // ---------------- AUXILIARY FUNCTIONS -----------------------
 
