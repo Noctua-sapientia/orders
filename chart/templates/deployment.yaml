@@ -30,17 +30,17 @@ spec:
                   key: orders_db_url
           ports:
             - name: http
-              containerPort: 3000
+              containerPort: 3001
               protocol: TCP
           readinessProbe:
             initialDelaySeconds: 10
             periodSeconds: 1
             httpGet:
               path: /
-              port: 3000
+              port: 3001
           livenessProbe:
             initialDelaySeconds: 10
             periodSeconds: 1
             httpGet:
               path: /
-              port: 3000
+              port: 3001

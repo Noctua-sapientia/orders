@@ -13,6 +13,8 @@ COPY routes/ ./routes
 COPY models/ ./models
 COPY app.js .
 
-EXPOSE 3000
+ENV DB_URL='mongodb+srv://orders:orders@orders.y95zrbf.mongodb.net/?retryWrites=true&w=majority'
+
+EXPOSE 3001
 
 CMD npm start
