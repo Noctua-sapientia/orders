@@ -15,6 +15,6 @@ COPY app.js .
 
 ENV DB_URL='mongodb+srv://orders:orders@orders.y95zrbf.mongodb.net/?retryWrites=true&w=majority'
 
-EXPOSE 3001
+EXPOSE 4003
 
 CMD npm start

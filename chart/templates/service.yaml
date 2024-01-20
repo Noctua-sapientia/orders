@@ -12,7 +12,7 @@ spec:
     app.kubernetes.io/instance: {{ .Release.Name }}
   type: ClusterIP
   ports:
-    - targetPort: 3001
+    - targetPort: 4003
       protocol: TCP
       name: http
-      port: 3001
+      port: 4003
