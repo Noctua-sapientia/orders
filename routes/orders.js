@@ -92,8 +92,9 @@ router.get('/', async function(req, res, next) {
 
   // selected orders containing a certain book
   if (req.query.bookId) {
+    const bookIdQuery = parseInt(req.query.bookId);
     selectedOrders = selectedOrders.filter(order => 
-      order.books.some(book => book.bookId === req.query.bookId)
+      order.books.some(book => parseInt(book.bookId) === bookIdQuery)
     );
   }
 
