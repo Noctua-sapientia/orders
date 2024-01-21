@@ -27,6 +27,26 @@ describe("Orders API", () => {
 
   });
   
+  // ------------------- TEST DOCUMENTATION -------------------
+
+  describe("GET /api/v1/apidocs/orders", () => {
+      
+    it("Should return an HTML document", async () => {
+      return request(app)
+          .get('/api/v1/apidocs/orders')
+          .then(response => {
+              if (response.redirect) {
+                  return request(app).get(response.headers.location);
+              }
+              return response;
+          })
+          .then(response => {
+              expect(response.type).toEqual(expect.stringContaining("html"));
+              expect(response.text).toEqual(expect.stringContaining("swagger-ui"));
+          });
+    });
+  
+  });
 
   // ------------------- TEST GETS -------------------
 

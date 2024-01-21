@@ -38,7 +38,7 @@ var swaggerSpec = swaggerJsDoc(options);
 // Routes
 app.use('/', indexRouter);
 app.use('/api/v1/orders', ordersRouter);
-app.use('/api/v1/apidocs', 
+app.use('/api/v1/apidocs/orders', 
     swaggerUi.serve, 
     swaggerUi.setup(swaggerSpec));
 
