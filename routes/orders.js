@@ -543,6 +543,7 @@ router.put('/:orderId', verificarToken, async function(req, res, next) {
 router.put('/books/:bookId/cancelledRemove', verificarToken, async function(req, res, next) {
   const bookId = parseInt(req.params.bookId);
   let suppressions = 0;
+  
 
   try {
     // Encuentra órdenes con el libro y estado 'In preparation'
@@ -750,14 +751,24 @@ router.put('/user/:userId/deliveryAddress', verificarToken, async function(req, 
 */
 router.delete('/:orderId', verificarToken, async function(req, res, next) {
   try {
-    const result = await Order.deleteOne({ "orderId": req.params.orderId });
 
-    if (result.deletedCount === 0) {
+    const orderId = parseInt(req.params.orderId);
+
+    const order = await Order.find({ "orderId": orderId });
+
+    if (!order) {
       return res.status(404).send({ error: 'Order not found' });
     }
 
-    res.status(200).send({ message: `Order id=${req.params.orderId} deleted successfully` });
-  } catch (error) {
+    if (order.status === 'Cancelled' || order.status === 'Delivered') {
+      const result = await Order.deleteOne({ "orderId": orderId });
+      res.status(200).send({ message: `Order id=${orderId} deleted successfully` });
+    } else {
+      // Si el estado no es ni Cancelled ni Delivered, no permitir la eliminación
+      res.status(403).send({ error: 'Order cannot be deleted. Only orders that are Cancelled or Delivered can be deleted.' });
+    }
+  }
+  catch (error) {
     return res.status(500).send({ error: 'Database error.' });
   }
 });
