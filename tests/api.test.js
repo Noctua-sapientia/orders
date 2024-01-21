@@ -8,6 +8,9 @@ const SECRET_KEY = 'a56d1f7c0c817387a072692731ea60df7c3a6c19d82ddac228a9a4461f8c
 
 describe("Orders API", () => {
 
+
+  // ------------------- TEST RAIZ ------------------- 
+
   describe("GET /", () => {
 
     it("Should return an HTML document", () =>{
@@ -23,8 +26,12 @@ describe("Orders API", () => {
     });
 
   });
+  
 
-  describe("GET /", () => {
+  // ------------------- TEST GETS -------------------
+
+  // Test GET /orders
+  describe("GET /orders", () => {
 
     const orders = [
       new Order({ "userId": 1, "sellerId": 2, "status": "In preparation", "creationDatetime": "2024-01-21", "updateDatetime": "2024-01-21", "shippingCost": 5, "books": [{"bookId": 12345678, "units": 2, "price": 5}], "orderId": 1 , "deliveryAddress": "Calle Falsa 123", "maxDeliveryDate": "2024-01-21"}),
@@ -63,7 +70,153 @@ describe("Orders API", () => {
     });
   });
 
-  describe("PUT /:orderId", () => {
+  
+  // Test GET /orders/:orderId
+  describe("GET /orders/:orderId" , () => {
+
+    var orders;
+    var dbFind;
+
+
+    beforeEach(() => {
+      token = jwt.sign({}, SECRET_KEY, { expiresIn: '1h' });
+      orders = [
+        new Order({ "orderId": 1, "userId": 1, "sellerId": 2, "books": [{"bookId": 12345678, "units": 2, "price": 5}], "shippingCost": 5, "status": "In preparation", "deliveryAddress": "Calle Falsa 123", "maxDeliveryDate": new Date("2023-01-01"), "updateDatetime": new Date("2023-01-01"), "creationDatetime": new Date("2023-01-01") }), 
+        new Order({ "orderId": 2, "userId": 1, "sellerId": 3, "books": [{"bookId": 87654321, "units": 1, "price": 10}], "shippingCost": 7, "status": "Shipped", "deliveryAddress": "Calle Falsa 321",  "maxDeliveryDate": new Date("2023-01-01"), "updateDatetime": new Date("2023-01-01"), "creationDatetime": new Date("2023-01-01")}),
+        new Order({ "orderId": 3, "userId": 2, "sellerId": 2, "books": [{"bookId": 12345679, "units": 3, "price": 7}], "shippingCost": 3, "status": "Delivered", "deliveryAddress": "Calle Falsa 333", "maxDeliveryDate": new Date("2023-01-01"), "updateDatetime": new Date("2023-01-01"), "creationDatetime": new Date("2023-01-01") })
+      ];
+      dbFind = jest.spyOn(Order, 'find');
+    });
+
+
+
+    it('Should return a specific order when it exists', async () => {
+      dbFind.mockImplementation(() => Promise.resolve(orders));
+      return request(app).get('/api/v1/orders/1').set('Authorization', token).then((response) => {
+          expect(response.status).toBe(200);
+          expect(response.body.orderId).toEqual(orders[0].orderId);
+      });
+    });
+
+
+
+    it('Should return 404 when the order does not exist', async () => {
+      dbFind.mockImplementation(() => Promise.resolve(orders));
+      return request(app).get('/api/v1/orders/4').set('Authorization', token).then((response) => {
+          expect(response.status).toBe(404);
+      });
+    });
+
+
+
+    it('Should return 500 when there is a database error', async () => {
+      dbFind.mockImplementation(() => Promise.reject(new Error('Database error')));
+      return request(app).get('/api/v1/orders/1').set('Authorization', token).then((response) => {
+          expect(response.status).toBe(500);
+      });
+    });
+
+  });
+
+
+
+  // ------------------- TEST POST -------------------
+
+  // Test POST /orders
+  describe("POST /orders", () => {
+
+    var dbFind, dbSave;
+    var orders = [];
+    
+
+    beforeEach(() => {
+      token = jwt.sign({}, SECRET_KEY, { expiresIn: '1h' });
+      dbFind = jest.spyOn(Order, 'find');     
+      dbFind.mockImplementation(() => Promise.resolve(orders));
+      dbSave = jest.spyOn(Order.prototype, 'save');
+    });
+
+
+    
+    it('Should create a new order successfully', async () => {
+      const orderData = { "userId": 1, "sellerId": 2, "books": [{"bookId": 12345678, "units": 2, "price": 5}], 
+      "shippingCost": 5, "deliveryAddress": "Calle Falsa 123", "maxDeliveryDate": "2023-01-01" }; 
+      dbSave.mockImplementation(async () => {
+        orders.push(new Order(orderData));
+        Promise.resolve(true);
+      });
+
+      return request(app).post('/api/v1/orders').set('Authorization', token).send(orderData).then((response) => {
+          expect(response.status).toBe(201);
+          expect(response.body.message).toContain('created successfully');
+          expect(dbSave).toBeCalled();
+          expect(orders).toBeArrayOfSize(1);
+        });
+    });
+
+
+
+    it('Should return 400 when a required field is missing', async () => {
+      const orderData_notAllFields = { "books": [{"bookId": 12345678, "units": 2, "price": 5}], 
+      "shippingCost": 5, "deliveryAddress": "Calle Falsa 123", "maxDeliveryDate": "2023-01-01" };  
+      dbSave.mockImplementation(() => Promise.resolve());
+
+      return request(app).post('/api/v1/orders').set('Authorization', token).send(orderData_notAllFields).then((response) => {
+          expect(response.status).toBe(400);
+          expect(response.body.error).toContain('Missing required fields');
+          !expect(dbSave).toBeCalled();
+      });
+    });
+
+    it('Should return 400 when a required field is missing in books', async () => {
+      const orderData_notAllBookFields = { "userId": 1, "sellerId": 2, "books": [{"bookId": 12345678, "units": 2}], 
+      "shippingCost": 5, "deliveryAddress": "Calle Falsa 123", "maxDeliveryDate": "2023-01-01" }; 
+      dbSave.mockImplementation(() => Promise.resolve());
+
+      return request(app).post('/api/v1/orders').set('Authorization', token).send(orderData_notAllBookFields).then((response) => {
+          expect(response.status).toBe(400);
+          expect(response.body.error).toContain('Missing required fields in books');
+          !expect(dbSave).toBeCalled();
+      });    
+    });
+
+
+    it('Should return 400 for invalid date format', async () => {
+      const orderData_invalidDate = { "userId": 1, "sellerId": 2, "books": [{"bookId": 12345678, "units": 2, "price": 5}], 
+      "shippingCost": 5, "deliveryAddress": "Calle Falsa 123", "maxDeliveryDate": "01-01-2023" };
+      dbSave.mockImplementation(() => Promise.resolve());
+
+      return request(app).post('/api/v1/orders').set('Authorization', token).send(orderData_invalidDate).then((response) => {
+          expect(response.status).toBe(400);
+          expect(response.body.error).toContain('Invalid date format');
+          !expect(dbSave).toBeCalled();
+      });
+    });
+
+
+
+    it('Should return 500 when there is a database error on saving', async () => {
+      const orderData = { "userId": 1, "sellerId": 2, "books": [{"bookId": 12345678, "units": 2, "price": 5}], 
+      "shippingCost": 5, "deliveryAddress": "Calle Falsa 123", "maxDeliveryDate": "2023-01-01" }; 
+      dbSave.mockImplementation(() => Promise.reject(new Error('Database error')));
+
+      return request(app).post('/api/v1/orders').set('Authorization', token).send(orderData).then((response) => {
+          expect(response.status).toBe(500);
+          expect(response.body.error).toContain('Database error');
+          expect(dbSave).toBeCalled();
+      });
+    });
+
+
+
+
+  });
+
+
+  // ------------------- TEST PUTS -------------------
+
+  // Test PUT /orders/:orderId
+  describe("PUT /orders/:orderId", () => {
       let dbSave;
       let dbFind;
 
@@ -119,6 +272,8 @@ describe("Orders API", () => {
       
   });
 
+
+  // Test PUT /orders/books/:bookId/cancelledRemove
   describe("PUT /orders/books/:bookId/cancelledRemove", () => {
     let orders;
     let dbFind;
@@ -173,9 +328,8 @@ describe("Orders API", () => {
     });
   });
 
-
-
-  describe("PUT orders/users/:userId/cancelled", () => {
+  // Test PUT /orders/users/:userId/cancelled
+  describe("PUT /orders/users/:userId/cancelled", () => {
     let dbUpdate;
   
     beforeEach(() => {
@@ -220,8 +374,8 @@ describe("Orders API", () => {
     });
   });
 
-
-  describe("PUT orders/sellers/:sellerId/cancelled", () => {
+  // Test PUT /orders/sellers/:sellerId/cancelled
+  describe("PUT /orders/sellers/:sellerId/cancelled", () => {
     let dbUpdate;
   
     beforeEach(() => {
@@ -266,7 +420,8 @@ describe("Orders API", () => {
     });
   });
 
-  describe("PUT orders/user/:userId/deliveryAddress", () => {
+  // Test PUT /orders/user/:userId/deliveryAddress
+  describe("PUT /orders/user/:userId/deliveryAddress", () => {
     let dbUpdate;
   
     beforeEach(() => {
@@ -316,7 +471,11 @@ describe("Orders API", () => {
     });
   });
 
-  describe("DELETE /:orderId", () => {
+
+  // ------------------- TEST DELETE -------------------
+
+  // Test DELETE /orders/:orderId
+  describe("DELETE /orders/:orderId", () => {
     let dbFind;
     let dbDeleteOne;
   
@@ -373,4 +532,3 @@ describe("Orders API", () => {
 
 
 });
-
