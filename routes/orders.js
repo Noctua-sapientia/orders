@@ -2,6 +2,12 @@ var express = require('express');
 var router = express.Router();
 var Order = require('../models/order');
 var debug = require('debug')('orders-2:server');
+const verificarToken = require('./verificarToken');
+const cors = require('cors');
+
+
+
+router.use(cors());
 
 // ---------------- GET -----------------------
 // GET /orders :: Gives all books and allows to filter with certain criteria
@@ -64,7 +70,7 @@ var debug = require('debug')('orders-2:server');
  *       500:
  *        description: Database error.
  */
-router.get('/', async function(req, res, next) {
+router.get('/', verificarToken, async function(req, res, next) {
 
   let selectedOrders;
   try {
@@ -187,7 +193,7 @@ router.get('/', async function(req, res, next) {
  *       500:
  *         description: Database error.
  */
-router.get('/price/:orderId', async function(req, res, next) {
+router.get('/price/:orderId', verificarToken, async function(req, res, next) {
   const orderId = parseInt(req.params.orderId);
   let orders;
 
@@ -235,7 +241,7 @@ router.get('/price/:orderId', async function(req, res, next) {
  *       500:
  *         description: Database error.
  */
-router.get('/:orderId', async function(req, res, next) {
+router.get('/:orderId', verificarToken, async function(req, res, next) {
 
   const orderId = req.params.orderId;
   let orders;
@@ -312,7 +318,7 @@ router.get('/:orderId', async function(req, res, next) {
 *       500:
 *         description: Database error.
 */
-router.post('/', async function(req, res, next) {
+router.post('/', verificarToken, async function(req, res, next) {
 
   // Check if required fields are provided
   if (!(req.body.userId && req.body.sellerId && req.body.books && req.body.deliveryAddress && req.body.shippingCost)) {
@@ -429,7 +435,7 @@ router.post('/', async function(req, res, next) {
 *       500:
 *         description: Database error.
 */
-router.put('/:orderId', async function(req, res, next) {
+router.put('/:orderId', verificarToken, async function(req, res, next) {
   
   const orderId = req.params.orderId;
   let orders;
@@ -534,7 +540,7 @@ router.put('/:orderId', async function(req, res, next) {
  *       500:
  *         description: Database error.
  */
-router.put('/books/:bookId/cancelledRemove', async function(req, res, next) {
+router.put('/books/:bookId/cancelledRemove', verificarToken, async function(req, res, next) {
   const bookId = parseInt(req.params.bookId);
   let suppressions = 0;
 
@@ -589,7 +595,7 @@ router.put('/books/:bookId/cancelledRemove', async function(req, res, next) {
  *       500:
  *         description: Database error.
  */
-router.put('/sellers/:sellerId/cancelled', async function(req, res, next) {
+router.put('/sellers/:sellerId/cancelled', verificarToken, async function(req, res, next) {
   const sellerId = parseInt(req.params.sellerId);
 
   try {
@@ -633,7 +639,7 @@ router.put('/sellers/:sellerId/cancelled', async function(req, res, next) {
  *       500:
  *         description: Database error.
  */
-router.put('/users/:userId/cancelled', async function(req, res, next) {
+router.put('/users/:userId/cancelled', verificarToken, async function(req, res, next) {
   const userId = parseInt(req.params.userId);
 
   try {
@@ -690,7 +696,7 @@ router.put('/users/:userId/cancelled', async function(req, res, next) {
  *       500:
  *         description: Database error.
  */
-router.put('/user/:userId/deliveryAddress', async function(req, res, next) {
+router.put('/user/:userId/deliveryAddress', verificarToken, async function(req, res, next) {
   const userId = parseInt(req.params.userId);
   const newAddress = req.body.deliveryAddress;
 
@@ -742,7 +748,7 @@ router.put('/user/:userId/deliveryAddress', async function(req, res, next) {
 *       500:
 *         description: Database error.
 */
-router.delete('/:orderId', async function(req, res, next) {
+router.delete('/:orderId', verificarToken, async function(req, res, next) {
   try {
     const result = await Order.deleteOne({ "orderId": req.params.orderId });
 
