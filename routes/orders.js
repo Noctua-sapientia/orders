@@ -358,12 +358,29 @@ router.post('/', verificarToken, async function(req, res, next) {
   try {
     await order.save();
     res.status(201).send({ message: `New order id=${order.orderId} created successfully`});
+    if (process.env.NODE_ENV != 'test') {
+      const token = req.header('Authorization');
+      const axiosConfig = {
+        headers: {
+          'Authorization': token
+        }
+      };
+      
+      // Actulizamos el stock de los libros
+      for (const book of req.body.books) {
+        await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/increaseStock`, {units: -book.units}, axiosConfig);
+      }
+    }
+    
   } catch (error) {
-    return res.status(500).send({ error: "Database error" });    
+      if (error.errors){
+        return res.status(400).send({ error: error.errors });
+      }
+      else{
+        return res.status(500).send({ error: "Database error" });
+      }
+    
   }
-  // Cuando se hace un pedido se debe de modificar el stock de los libros (comunicacion Libros --> Pedidos)
-  // Completar con llamada a microservicio de libros
-  // +++++++++++++++++++++++++++++++++++++++++++++++++++++
 });
 
 
@@ -486,18 +503,39 @@ router.put('/:orderId', verificarToken, async function(req, res, next) {
     try {
       await order.save();
       res.status(200).send({ message: `Order id=${orderId} updated successfully` });
+
+      if (process.env.NODE_ENV != 'test') {
+
+        const token = req.header('Authorization');
+        const axiosConfig = {
+          headers: {
+            'Authorization': token
+          }
+        };
+
+        // Lógica adicional para comunicarse con otros microservicios
+        if (temporalOrder.status === 'Cancelled') {
+          // Iterar sobre cada libro en el pedido y actualizar el stock
+          for (const book of order.books) {
+            await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/increaseStock`, {units: book.units}, axiosConfig);
+          }
+        } else if (temporalOrder.status === 'Delivered') {
+          // Llamar al microservicio de usuarios para actualizar el contador de pedidos
+            for (const book of order.books) {
+              await axios.put(`http://localhost:4001/api/v1/sellers/${order.sellerId}/increaseOrders`, { units: book.units }, axiosConfig);
+          }
+            
+        }
+      }
     }
     catch (error) {
-      return res.status(500).send({ error: "An error occurred while updating the order" });
+      if (error.errors){
+        return res.status(400).send({ error: error.errors });
+      }
+      else{
+        return res.status(500).send({ error: "An error occurred while updating the order" });
+      }
     }
-
-    // Si se cancela el pedido se debe de modificar el stock de los libros (comunicacion Libros --> Pedidos)
-    // Completar con llamada a microservicio de libros   
-    // +++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-    // Si se completa un pedido se debe de modificar el numero de pedidos del vendedor (comunicacion Libros --> Usuarios)
-    // Completar con llamada a microservicio de usuarios 
-    // +++++++++++++++++++++++++++++++++++++++++++++++++++++
 
   } else {
     res.status(404).send({ error: "Order not found" });
@@ -639,6 +677,27 @@ router.put('/users/:userId/cancelled', verificarToken, async function(req, res, 
 
     if (updateResult.matchedCount > 0) {
       res.status(200).send(`Cancelled ${updateResult.modifiedCount} orders successfully for user id=${userId}.`);
+
+
+      if (process.env.NODE_ENV != 'test') {
+        const token = req.header('Authorization');
+        const axiosConfig = {
+          headers: {
+            'Authorization': token
+          }
+        };
+
+        const orders = await Order.find({ userId: userId, status: 'In preparation' });
+
+        // Iterar sobre cada pedido y sobre cada libro en el pedido
+        for (const order of orders) {
+          for (const book of order.books) {
+            await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/increaseStock`, {
+              units: book.units
+            }, axiosConfig);
+          }
+        }
+      }
     } else {
       res.status(404).send(`No orders in progress for user id=${userId}`);
     }
