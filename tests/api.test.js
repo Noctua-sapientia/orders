@@ -2,6 +2,10 @@ const app = require('../app');
 const request = require('supertest');
 const Order = require('../models/order');
 
+const jwt = require('jsonwebtoken');
+
+const SECRET_KEY = 'a56d1f7c0c817387a072692731ea60df7c3a6c19d82ddac228a9a4461f8c5a72';
+
 describe("Orders API", () => {
 
   describe("GET /", () => {
@@ -21,19 +25,23 @@ describe("Orders API", () => {
   });
 
   describe("GET /", () => {
-    const date = new Date().toISOString();
+
     const orders = [
-        new Order({ "userId": 1, "sellerId": 2, "status": "In preparation", "creationDatetime": date, "updateDatetime": date, "shippingCost": 5, "books": [{"bookId": 12345678, "units": 2, "price": 5}], "orderId": 1 , "deliveryAddress": "Calle Falsa 123", "maxDeliveryDate": date}),
-        new Order({ "userId": 1, "sellerId": 3, "status": "Shipped", "creationDatetime": date, "updateDatetime": date, "shippingCost": 7, "books": [{"bookId": 87654321, "units": 1, "price": 10}], "orderId": 2 , "deliveryAddress": "Calle Falsa 321", "maxDeliveryDate": date}),
-        new Order({ "userId": 2, "sellerId": 2, "status": "Delivered", "creationDatetime": date, "updateDatetime": date, "shippingCost": 3, "books": [{"bookId": 12345679, "units": 3, "price": 7}], "orderId": 3, "deliveryAddress": "Calle Falsa 333", "maxDeliveryDate": date })
-    ];
+      new Order({ "userId": 1, "sellerId": 2, "status": "In preparation", "creationDatetime": "2024-01-21", "updateDatetime": "2024-01-21", "shippingCost": 5, "books": [{"bookId": 12345678, "units": 2, "price": 5}], "orderId": 1 , "deliveryAddress": "Calle Falsa 123", "maxDeliveryDate": "2024-01-21"}),
+      new Order({ "userId": 1, "sellerId": 3, "status": "Shipped", "creationDatetime": "2024-01-21", "updateDatetime": "2024-01-21", "shippingCost": 7, "books": [{"bookId": 87654321, "units": 1, "price": 10}], "orderId": 2 , "deliveryAddress": "Calle Falsa 321", "maxDeliveryDate": "2024-01-21"}),
+      new Order({ "userId": 2, "sellerId": 2, "status": "Delivered", "creationDatetime": "2024-01-21", "updateDatetime": "2024-01-21", "shippingCost": 3, "books": [{"bookId": 12345679, "units": 3, "price": 7}], "orderId": 3, "deliveryAddress": "Calle Falsa 333", "maxDeliveryDate": "2024-01-21"})
+  ];
+
+    beforeEach(() => {
+      token = jwt.sign({}, SECRET_KEY, { expiresIn: '1h' });
+    });
 
     
     jest.spyOn(Order, "find").mockImplementation(async () => Promise.resolve(orders));
     
 
     it("Should return all orders if no query parameters are specified", async () => {
-        return request(app).get("/api/v1/orders").then((response) => {
+        return request(app).get("/api/v1/orders").set('Authorization', token).then((response) => {
             expect(response.statusCode).toBe(200);
             expect(response.body).toBeArrayOfSize(3);
         });
@@ -41,23 +49,15 @@ describe("Orders API", () => {
 
     it("Should return orders filtered by userId", async () => {
       const userId = 1;
-      return request(app).get(`/api/v1/orders?userId=${userId}`).then((response) => {
+      return request(app).get(`/api/v1/orders?userId=${userId}`).set('Authorization', token).then((response) => {
           expect(response.statusCode).toBe(200);
           expect(response.body).toBeArrayOfSize(2);
         });
     });
 
-    // it("Should return orders sorted by creation date", async () => {
-    //     return request(app).get("/api/v1/orders?sort=creationDate").then((response) => {
-    //         expect(response.statusCode).toBe(200);
-    //         const sortedOrders = [...orders].sort((a, b) => (a.creationDatetime) - (b.creationDatetime));
-    //         expect(response.body).toEqual(sortedOrders.map(order => order.cleanup()));
-    //     });
-    //   });
-
 
     it("Should return 404 if no orders match the query", async () => {
-        return request(app).get("/api/v1/orders?userId=-1").then((response) => {
+        return request(app).get("/api/v1/orders?userId=-1").set('Authorization', token).then((response) => {
             expect(response.statusCode).toBe(404);
         });
     });
@@ -75,6 +75,8 @@ describe("Orders API", () => {
             new Order({ "userId": 2, "sellerId": 2, "status": "Delivered", "creationDatetime": date, "updateDatetime": date, "shippingCost": 3, "books": [{"bookId": 12345679, "units": 3, "price": 7}], "orderId": 3, "deliveryAddress": "Calle Falsa 333", "maxDeliveryDate": date })
         ];
 
+        token = jwt.sign({}, SECRET_KEY, { expiresIn: '1h' });
+
           dbFind = jest.spyOn(Order, "find");
           dbFind.mockImplementation(async () => Promise.resolve(orders));
 
@@ -86,7 +88,7 @@ describe("Orders API", () => {
           const orderId = 1;
           const updatedData = { "status": "Delivered" };
 
-          return request(app).put(`/api/v1/orders/${orderId}`).send(updatedData).then((response) => {
+          return request(app).put(`/api/v1/orders/${orderId}`).set('Authorization', token).send(updatedData).then((response) => {
               expect(response.statusCode).toBe(200);
               expect(dbSave).toBeCalled();
           });
@@ -96,7 +98,7 @@ describe("Orders API", () => {
           const orderId = -1;
           const updatedData = { "status": "Delivered" };
 
-          return request(app).put(`/api/v1/orders/${orderId}`).send(updatedData).then((response) => {
+          return request(app).put(`/api/v1/orders/${orderId}`).set('Authorization', token).send(updatedData).then((response) => {
               expect(response.statusCode).toBe(404);
               expect(dbSave).toBeCalled();
           });
@@ -109,7 +111,7 @@ describe("Orders API", () => {
           const orderId = 1;
           const updatedData = { "status": "Delivered" };
 
-          return request(app).put(`/api/v1/orders/${orderId}`).send(updatedData).then((response) => {
+          return request(app).put(`/api/v1/orders/${orderId}`).set('Authorization', token).send(updatedData).then((response) => {
               expect(response.statusCode).toBe(500);
               expect(dbSave).toBeCalled();
           });
@@ -130,6 +132,8 @@ describe("Orders API", () => {
             new Order({ "userId": 2, "sellerId": 2, "status": "Delivered", "creationDatetime": date, "updateDatetime": date, "shippingCost": 3, "books": [{"bookId": 12345679, "units": 3, "price": 7}], "orderId": 3, "deliveryAddress": "Calle Falsa 333", "maxDeliveryDate": date })
         ];
 
+        token = jwt.sign({}, SECRET_KEY, { expiresIn: '1h' });
+
         dbFind = jest.spyOn(Order, "find");
         dbSave = jest.spyOn(Order.prototype, "save").mockImplementation(async () => Promise.resolve(true));
     });
@@ -138,7 +142,7 @@ describe("Orders API", () => {
         const bookId = 12345678;
         dbFind.mockImplementation(async () => Promise.resolve(orders.filter(order => order.status === 'In preparation' && order.books.some(book => book.bookId === bookId))));
         
-        return request(app).put(`/api/v1/orders/books/${bookId}/cancelledRemove`).then((response) => {
+        return request(app).put(`/api/v1/orders/books/${bookId}/cancelledRemove`).set('Authorization', token).then((response) => {
             expect(response.statusCode).toBe(200);
             expect(dbFind).toBeCalled();
             expect(dbSave).toBeCalled();
@@ -150,7 +154,7 @@ describe("Orders API", () => {
 
         dbFind.mockImplementation(async () => Promise.resolve(orders.filter(order => order.status === 'In preparation' && order.books.some(book => book.bookId === bookId))));
 
-        return request(app).put(`/api/v1/orders/books/${bookId}/cancelledRemove`).then((response) => {
+        return request(app).put(`/api/v1/orders/books/${bookId}/cancelledRemove`).set('Authorization', token).then((response) => {
             expect(response.statusCode).toBe(404);
             expect(dbFind).toBeCalled();
             expect(dbSave).toBeCalled();
@@ -161,7 +165,7 @@ describe("Orders API", () => {
         const bookId = 1;
         dbFind.mockImplementation(async () => Promise.reject("Database error"));
 
-        return request(app).put(`/api/v1/orders/books/${bookId}/cancelledRemove`).then((response) => {
+        return request(app).put(`/api/v1/orders/books/${bookId}/cancelledRemove`).set('Authorization', token).then((response) => {
             expect(response.statusCode).toBe(500);
             expect(dbFind).toBeCalled();
             expect(dbSave).toBeCalled();
@@ -176,6 +180,7 @@ describe("Orders API", () => {
   
     beforeEach(() => {
       dbUpdate = jest.spyOn(Order, 'updateMany');
+      token = jwt.sign({}, SECRET_KEY, { expiresIn: '1h' });
     });
   
     it("Should cancel all 'In preparation' orders for a user", async () => {
@@ -183,7 +188,7 @@ describe("Orders API", () => {
       const mockUpdateResult = { matchedCount: 2, modifiedCount: 2 };
       dbUpdate.mockResolvedValue(mockUpdateResult);
   
-      return request(app).put(`/api/v1/orders/users/${userId}/cancelled`).then((response) => {
+      return request(app).put(`/api/v1/orders/users/${userId}/cancelled`).set('Authorization', token).then((response) => {
         expect(response.statusCode).toBe(200);
         expect(response.text).toContain(`Cancelled ${mockUpdateResult.modifiedCount} orders successfully for user id=${userId}.`);
         expect(dbUpdate).toHaveBeenCalledWith(
@@ -198,7 +203,7 @@ describe("Orders API", () => {
       const mockUpdateResult = { matchedCount: 0, modifiedCount: 0 };
       dbUpdate.mockResolvedValue(mockUpdateResult);
   
-      return request(app).put(`/api/v1/orders/users/${userId}/cancelled`).then((response) => {
+      return request(app).put(`/api/v1/orders/users/${userId}/cancelled`).set('Authorization', token).then((response) => {
         expect(response.statusCode).toBe(404);
         expect(response.text).toContain(`No orders in progress for user id=${userId}`);
       });
@@ -208,7 +213,7 @@ describe("Orders API", () => {
       const userId = 1;
       dbUpdate.mockRejectedValue(new Error("Database error"));
   
-      return request(app).put(`/api/v1/orders/users/${userId}/cancelled`).then((response) => {
+      return request(app).put(`/api/v1/orders/users/${userId}/cancelled`).set('Authorization', token).then((response) => {
         expect(response.statusCode).toBe(500);
         expect(response.body).toEqual({ error: "Database error" });
       });
@@ -221,6 +226,7 @@ describe("Orders API", () => {
   
     beforeEach(() => {
       dbUpdate = jest.spyOn(Order, 'updateMany');
+      token = jwt.sign({}, SECRET_KEY, { expiresIn: '1h' });
     });
   
     it("Should cancel all 'In preparation' orders for a seller", async () => {
@@ -228,7 +234,7 @@ describe("Orders API", () => {
       const mockUpdateResult = { matchedCount: 2, modifiedCount: 2 };
       dbUpdate.mockResolvedValue(mockUpdateResult);
   
-      return request(app).put(`/api/v1/orders/sellers/${sellerId}/cancelled`).then((response) => {
+      return request(app).put(`/api/v1/orders/sellers/${sellerId}/cancelled`).set('Authorization', token).then((response) => {
         expect(response.statusCode).toBe(200);
         expect(response.text).toContain(`Cancelled ${mockUpdateResult.modifiedCount} orders successfully for seller id=${sellerId}.`);
         expect(dbUpdate).toHaveBeenCalledWith(
@@ -243,7 +249,7 @@ describe("Orders API", () => {
       const mockUpdateResult = { matchedCount: 0, modifiedCount: 0 };
       dbUpdate.mockResolvedValue(mockUpdateResult);
   
-      return request(app).put(`/api/v1/orders/sellers/${sellerId}/cancelled`).then((response) => {
+      return request(app).put(`/api/v1/orders/sellers/${sellerId}/cancelled`).set('Authorization', token).then((response) => {
         expect(response.statusCode).toBe(404);
         expect(response.text).toContain(`No orders in progress for seller id=${sellerId}`);
       });
@@ -253,7 +259,7 @@ describe("Orders API", () => {
       const sellerId = 1;
       dbUpdate.mockRejectedValue(new Error("Database error"));
   
-      return request(app).put(`/api/v1/orders/sellers/${sellerId}/cancelled`).then((response) => {
+      return request(app).put(`/api/v1/orders/sellers/${sellerId}/cancelled`).set('Authorization', token).then((response) => {
         expect(response.statusCode).toBe(500);
         expect(response.body).toEqual({ error: "Database error" });
       });
@@ -265,6 +271,7 @@ describe("Orders API", () => {
   
     beforeEach(() => {
       dbUpdate = jest.spyOn(Order, 'updateMany');
+      token = jwt.sign({}, SECRET_KEY, { expiresIn: '1h' });
     });
   
     it("Should update delivery address for 'In preparation' orders of a user", async () => {
@@ -272,8 +279,9 @@ describe("Orders API", () => {
       const newAddress = "New Address 123";
       const mockUpdateResult = { matchedCount: 2, modifiedCount: 2 };
       dbUpdate.mockResolvedValue(mockUpdateResult);
+      
   
-      return request(app).put(`/api/v1/orders/user/${userId}/deliveryAddress`).send({ deliveryAddress: newAddress }).then((response) => {
+      return request(app).put(`/api/v1/orders/user/${userId}/deliveryAddress`).set('Authorization', token).send({ deliveryAddress: newAddress }).then((response) => {
         expect(response.statusCode).toBe(200);
         expect(response.text).toContain(`Delivery address updated on ${mockUpdateResult.modifiedCount} orders for user id=${userId}.`);
         expect(dbUpdate).toHaveBeenCalledWith(
@@ -290,7 +298,7 @@ describe("Orders API", () => {
       const mockUpdateResult = { matchedCount: 0, modifiedCount: 0 };
       dbUpdate.mockResolvedValue(mockUpdateResult);
   
-      return request(app).put(`/api/v1/orders/user/${userId}/deliveryAddress`).send({ deliveryAddress: newAddress }).then((response) => {
+      return request(app).put(`/api/v1/orders/user/${userId}/deliveryAddress`).set('Authorization', token).send({ deliveryAddress: newAddress }).then((response) => {
         expect(response.statusCode).toBe(404);
         expect(response.text).toContain('No orders in progress for this user.');
       });
@@ -301,7 +309,7 @@ describe("Orders API", () => {
       const newAddress = "New Address 123";
       dbUpdate.mockRejectedValue(new Error("Database error"));
   
-      return request(app).put(`/api/v1/orders/user/${userId}/deliveryAddress`).send({ deliveryAddress: newAddress }).then((response) => {
+      return request(app).put(`/api/v1/orders/user/${userId}/deliveryAddress`).set('Authorization', token).send({ deliveryAddress: newAddress }).then((response) => {
         expect(response.statusCode).toBe(500);
         expect(response.body).toEqual({ error: "Database error" });
       });
@@ -315,6 +323,7 @@ describe("Orders API", () => {
     beforeEach(() => {
       dbFind = jest.spyOn(Order, 'find');
       dbDeleteOne = jest.spyOn(Order, 'deleteOne');
+      token = jwt.sign({}, SECRET_KEY, { expiresIn: '1h' });
     });
   
     it("Should delete the order if it is 'Cancelled' or 'Delivered'", async () => {
@@ -323,7 +332,7 @@ describe("Orders API", () => {
       dbFind.mockResolvedValue(mockOrder);
       dbDeleteOne.mockResolvedValue({ deletedCount: 1 });
   
-      return request(app).delete(`/api/v1/orders/${orderId}`).then((response) => {
+      return request(app).delete(`/api/v1/orders/${orderId}`).set('Authorization', token).then((response) => {
         expect(response.statusCode).toBe(200);
         expect(response.body).toEqual({ message: `Order id=${orderId} deleted successfully` });
         expect(dbDeleteOne).toHaveBeenCalledWith({ "orderId": orderId });
@@ -335,7 +344,7 @@ describe("Orders API", () => {
       const mockOrder = new Order({ "userId": 1, "sellerId": 2, "status": "In Prepration", "creationDatetime": new Date().toISOString(), "updateDatetime": new Date().toISOString(), "shippingCost": 5, "books": [{"bookId": 12345678, "units": 2, "price": 5}], "orderId": 1 , "deliveryAddress": "Calle Falsa 123", "maxDeliveryDate": new Date().toISOString() });
       dbFind.mockResolvedValue(mockOrder);
   
-      return request(app).delete(`/api/v1/orders/${orderId}`).then((response) => {
+      return request(app).delete(`/api/v1/orders/${orderId}`).set('Authorization', token).then((response) => {
         expect(response.statusCode).toBe(403);
         expect(response.body).toEqual({ error: 'Order cannot be deleted. Only orders that are Cancelled or Delivered can be deleted.' });
       });
@@ -345,7 +354,7 @@ describe("Orders API", () => {
       const orderId = 1;
       dbFind.mockResolvedValue();
   
-      return request(app).delete(`/api/v1/orders/${orderId}`).then((response) => {
+      return request(app).delete(`/api/v1/orders/${orderId}`).set('Authorization', token).then((response) => {
         expect(response.statusCode).toBe(404);
         expect(response.body).toEqual({ error: 'Order not found' });
       });
@@ -355,7 +364,7 @@ describe("Orders API", () => {
       const orderId = 1;
       dbFind.mockRejectedValue(new Error("Database error"));
   
-      return request(app).delete(`/api/v1/orders/${orderId}`).then((response) => {
+      return request(app).delete(`/api/v1/orders/${orderId}`).set('Authorization', token).then((response) => {
         expect(response.statusCode).toBe(500);
         expect(response.body).toEqual({ error: 'Database error.' });
       });
