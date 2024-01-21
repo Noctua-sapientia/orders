@@ -303,13 +303,12 @@ router.get('/:orderId', verificarToken, async function(req, res, next) {
 *                   required:
 *                     - bookId
 *                     - units
+*                     - price
 *               deliveryAddress:
 *                 type: string
 *               maxDeliveryDate:
 *                 type: string
-*                 format: date format: YYYY-MM-DD
-*               payment:
-*                 type: number
+*                 format: YYYY-MM-DD
 *     responses:
 *       201:
 *         description: New order created successfully.
@@ -360,13 +359,7 @@ router.post('/', verificarToken, async function(req, res, next) {
     await order.save();
     res.status(201).send({ message: `New order id=${order.orderId} created successfully`});
   } catch (error) {
-      if (error.errors){
-        return res.status(400).send({ error: error.errors });
-      }
-      else{
-        return res.status(500).send({ error: "Database error" });
-      }
-    
+    return res.status(500).send({ error: "Database error" });    
   }
   // Cuando se hace un pedido se debe de modificar el stock de los libros (comunicacion Libros --> Pedidos)
   // Completar con llamada a microservicio de libros
@@ -416,15 +409,14 @@ router.post('/', verificarToken, async function(req, res, next) {
 *                   required:
 *                     - bookId
 *                     - units
+*                     - price
 *               status:
 *                 type: string
 *               deliveryAddress:
 *                type: string
 *               maxDeliveryDate:
 *                 type: string
-*                 format: date format: YYYY-MM-DD
-*               payment:
-*                 type: number
+*                 format: YYYY-MM-DD
 *     responses:
 *       200:
 *         description: Order updated successfully.
@@ -496,12 +488,7 @@ router.put('/:orderId', verificarToken, async function(req, res, next) {
       res.status(200).send({ message: `Order id=${orderId} updated successfully` });
     }
     catch (error) {
-      if (error.errors){
-        return res.status(400).send({ error: error.errors });
-      }
-      else{
-        return res.status(500).send({ error: "An error occurred while updating the order" });
-      }
+      return res.status(500).send({ error: "An error occurred while updating the order" });
     }
 
     // Si se cancela el pedido se debe de modificar el stock de los libros (comunicacion Libros --> Pedidos)
