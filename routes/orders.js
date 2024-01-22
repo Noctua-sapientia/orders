@@ -800,7 +800,7 @@ router.delete('/:orderId', verificarToken, async function(req, res, next) {
 
     const orderId = parseInt(req.params.orderId);
 
-    const order = await Order.find({ "orderId": orderId });
+    const order = await Order.findOne({ "orderId": orderId });
 
     if (!order) {
       return res.status(404).send({ error: 'Order not found' });

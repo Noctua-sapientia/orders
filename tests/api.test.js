@@ -500,7 +500,7 @@ describe("Orders API", () => {
     let dbDeleteOne;
   
     beforeEach(() => {
-      dbFind = jest.spyOn(Order, 'find');
+      dbFind = jest.spyOn(Order, 'findOne');
       dbDeleteOne = jest.spyOn(Order, 'deleteOne');
       token = jwt.sign({}, SECRET_KEY, { expiresIn: '1h' });
     });
