@@ -12,8 +12,7 @@ COPY public/ ./public
 COPY routes/ ./routes
 COPY models/ ./models
 COPY app.js .
-
-ENV DB_URL='mongodb+srv://orders:orders@orders.y95zrbf.mongodb.net/?retryWrites=true&w=majority'
+COPY db.js .
 
 EXPOSE 4003
 
