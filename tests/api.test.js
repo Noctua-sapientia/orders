@@ -294,7 +294,7 @@ describe("Orders API", () => {
 
 
   // Test PUT /orders/books/:bookId/cancelledRemove
-  describe("PUT /orders/books/:bookId/cancelledRemove", () => {
+  describe("PUT /orders/books/:bookId/sellers/:sellerId/cancelledRemove", () => {
     let orders;
     let dbFind;
     let dbSave;
@@ -315,9 +315,10 @@ describe("Orders API", () => {
 
     it("Should cancel orders or remove book based on conditions", async () => {
         const bookId = 12345678;
+        const sellerId = 2;
         dbFind.mockImplementation(async () => Promise.resolve(orders.filter(order => order.status === 'In preparation' && order.books.some(book => book.bookId === bookId))));
         
-        return request(app).put(`/api/v1/orders/books/${bookId}/cancelledRemove`).set('Authorization', token).then((response) => {
+        return request(app).put(`/api/v1/orders/books/${bookId}/sellers/${sellerId}/cancelledRemove`).set('Authorization', token).then((response) => {
             expect(response.statusCode).toBe(200);
             expect(dbFind).toBeCalled();
             expect(dbSave).toBeCalled();
@@ -326,10 +327,11 @@ describe("Orders API", () => {
 
     it("Should return 404 if no orders to modify", async () => {
         const bookId = 2;
+        const sellerId = 2;
 
         dbFind.mockImplementation(async () => Promise.resolve(orders.filter(order => order.status === 'In preparation' && order.books.some(book => book.bookId === bookId))));
 
-        return request(app).put(`/api/v1/orders/books/${bookId}/cancelledRemove`).set('Authorization', token).then((response) => {
+        return request(app).put(`/api/v1/orders/books/${bookId}/sellers/${sellerId}/cancelledRemove`).set('Authorization', token).then((response) => {
             expect(response.statusCode).toBe(404);
             expect(dbFind).toBeCalled();
             expect(dbSave).toBeCalled();
@@ -338,9 +340,10 @@ describe("Orders API", () => {
 
     it("Should return 500 if there is a database error", async () => {
         const bookId = 1;
+        const sellerId = 2;
         dbFind.mockImplementation(async () => Promise.reject("Database error"));
 
-        return request(app).put(`/api/v1/orders/books/${bookId}/cancelledRemove`).set('Authorization', token).then((response) => {
+        return request(app).put(`/api/v1/orders/books/${bookId}/sellers/${sellerId}/cancelledRemove`).set('Authorization', token).then((response) => {
             expect(response.statusCode).toBe(500);
             expect(dbFind).toBeCalled();
             expect(dbSave).toBeCalled();

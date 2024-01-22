@@ -4,8 +4,17 @@ var Order = require('../models/order');
 var debug = require('debug')('orders-2:server');
 const verificarToken = require('./verificarToken');
 const cors = require('cors');
+const axios = require('axios');
 
+const formData = require('form-data');
+const Mailgun = require('mailgun.js');
+MAILGUN_API_KEY = "b23691a9fd654459f36203bc86f00ae8-063062da-9fab57db";
 
+const mailgun = new Mailgun(formData);
+const mg = mailgun.client({
+	username: 'api',
+	key: MAILGUN_API_KEY,
+});
 
 router.use(cors());
 
@@ -324,6 +333,7 @@ router.post('/', verificarToken, async function(req, res, next) {
     return res.status(400).send({ error: "Order not posted. Missing required fields" });
   }
 
+
   // Check if all the books fields are provided
   if (!(req.body.books.every(book => book.bookId && book.units && book.price))) {
     return res.status(400).send({ error: "Order not posted. Missing required fields in books" });
@@ -359,29 +369,43 @@ router.post('/', verificarToken, async function(req, res, next) {
     await order.save();
     res.status(201).send({ message: `New order id=${order.orderId} created successfully`});
     if (process.env.NODE_ENV != 'test') {
-      const token = req.header('Authorization');
-      const axiosConfig = {
-        headers: {
-          'Authorization': token
-        }
-      };
+
+      const accessToken = req.headers.authorization;
       
-      // Actulizamos el stock de los libros
+      const headers = {
+        Authorization: accessToken
+      };
+      const config = {
+        headers: headers,
+      };
+
       for (const book of req.body.books) {
-        await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/increaseStock`, {units: -book.units}, axiosConfig);
+        let response = await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/stock`, 
+                        { units: -book.units }, 
+                        config);
+      }
+
+      let totalBooksPrice = order.books.reduce((sum, book) => sum + (book.price * book.units), 0);
+      let totalPrice = totalBooksPrice + order.shippingCost;
+      
+      mg.messages.create("sandbox4ddb2b71136e40558a9d61263b7f8bdb.mailgun.org", {
+      from: "Mailgun Sandbox <postmaster@sandbox4ddb2b71136e40558a9d61263b7f8bdb.mailgun.org>",
+      to: ["preinaj@gmail.com"], // Cambiar a peticion de back
+      subject: "Inicio de pedido",
+      text: `Se ha creado con exito su pedido con un valor de ${totalPrice}€ el dia ${order.creationDatetime}`,
+    }).then(msg => console.log(msg)).catch(err => console.log(err)); // logs any error`;
+    }
+  } catch (error) {
+    if (!res.headersSent) {
+      if (error.errors) {
+        res.status(400).send({ error: error.errors });
+      } else {
+        res.status(500).send({ error: "Database error" });
       }
     }
-    
-  } catch (error) {
-      if (error.errors){
-        return res.status(400).send({ error: error.errors });
-      }
-      else{
-        return res.status(500).send({ error: "Database error" });
-      }
-    
   }
 });
+
 
 
 // ---------------- PUT -----------------------
@@ -506,23 +530,25 @@ router.put('/:orderId', verificarToken, async function(req, res, next) {
 
       if (process.env.NODE_ENV != 'test') {
 
-        const token = req.header('Authorization');
-        const axiosConfig = {
-          headers: {
-            'Authorization': token
-          }
+        const accessToken = req.headers.authorization;
+      
+        const headers = {
+          Authorization: accessToken
+        };
+        const config = {
+          headers: headers,
         };
 
         // Lógica adicional para comunicarse con otros microservicios
         if (temporalOrder.status === 'Cancelled') {
           // Iterar sobre cada libro en el pedido y actualizar el stock
           for (const book of order.books) {
-            await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/increaseStock`, {units: book.units}, axiosConfig);
+            await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/increaseStock`, {units: book.units}, config);
           }
         } else if (temporalOrder.status === 'Delivered') {
           // Llamar al microservicio de usuarios para actualizar el contador de pedidos
             for (const book of order.books) {
-              await axios.put(`http://localhost:4001/api/v1/sellers/${order.sellerId}/increaseOrders`, { units: book.units }, axiosConfig);
+              await axios.put(`http://localhost:4001/api/v1/sellers/${order.sellerId}/increaseOrders`, { units: book.units }, config);
           }
             
         }
@@ -565,15 +591,15 @@ router.put('/:orderId', verificarToken, async function(req, res, next) {
  *       500:
  *         description: Database error.
  */
-router.put('/books/:bookId/cancelledRemove', verificarToken, async function(req, res, next) {
+router.put('/books/:bookId/sellers/:sellerId/cancelledRemove', verificarToken, async function(req, res, next) {
   const bookId = parseInt(req.params.bookId);
+  const sellerId = parseInt(req.params.sellerId);
   let suppressions = 0;
   
 
   try {
     // Encuentra órdenes con el libro y estado 'In preparation'
-    let orders = await Order.find({ "books.bookId": bookId, status: 'In preparation' });
-
+    let orders = await Order.find({ "books.bookId": bookId, sellerId: sellerId, status: 'In preparation' });
     for (let order of orders) {
       if (order.books.length === 1 && order.books[0].bookId === bookId) {
         // Si el pedido solo contiene ese libro, cancela el pedido
@@ -680,11 +706,13 @@ router.put('/users/:userId/cancelled', verificarToken, async function(req, res, 
 
 
       if (process.env.NODE_ENV != 'test') {
-        const token = req.header('Authorization');
-        const axiosConfig = {
-          headers: {
-            'Authorization': token
-          }
+        const accessToken = req.headers.authorization;
+      
+        const headers = {
+          Authorization: accessToken
+        };
+        const config = {
+          headers: headers,
         };
 
         const orders = await Order.find({ userId: userId, status: 'In preparation' });
@@ -694,7 +722,7 @@ router.put('/users/:userId/cancelled', verificarToken, async function(req, res, 
           for (const book of order.books) {
             await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/increaseStock`, {
               units: book.units
-            }, axiosConfig);
+            }, config);
           }
         }
       }
