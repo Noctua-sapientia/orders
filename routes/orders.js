@@ -8,6 +8,7 @@ const axios = require('axios');
 
 const formData = require('form-data');
 const Mailgun = require('mailgun.js');
+
 MAILGUN_API_KEY = "b23691a9fd654459f36203bc86f00ae8-063062da-9fab57db";
 
 const mailgun = new Mailgun(formData);
@@ -543,7 +544,7 @@ router.put('/:orderId', verificarToken, async function(req, res, next) {
         if (temporalOrder.status === 'Cancelled') {
           // Iterar sobre cada libro en el pedido y actualizar el stock
           for (const book of order.books) {
-            await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/increaseStock`, {units: book.units}, config);
+            await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/stock`, {units: book.units}, config);
           }
         } else if (temporalOrder.status === 'Delivered') {
           // Llamar al microservicio de usuarios para actualizar el contador de pedidos
@@ -720,7 +721,7 @@ router.put('/users/:userId/cancelled', verificarToken, async function(req, res, 
         // Iterar sobre cada pedido y sobre cada libro en el pedido
         for (const order of orders) {
           for (const book of order.books) {
-            await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/increaseStock`, {
+            await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/stock`, {
               units: book.units
             }, config);
           }
