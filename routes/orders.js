@@ -6,17 +6,6 @@ const verificarToken = require('./verificarToken');
 const cors = require('cors');
 const axios = require('axios');
 
-const formData = require('form-data');
-const Mailgun = require('mailgun.js');
-
-MAILGUN_API_KEY = "b23691a9fd654459f36203bc86f00ae8-063062da-9fab57db";
-
-const mailgun = new Mailgun(formData);
-const mg = mailgun.client({
-	username: 'api',
-	key: MAILGUN_API_KEY,
-});
-
 router.use(cors());
 
 // ---------------- GET -----------------------
@@ -385,16 +374,6 @@ router.post('/', verificarToken, async function(req, res, next) {
                         { units: -book.units }, 
                         config);
       }
-
-      let totalBooksPrice = order.books.reduce((sum, book) => sum + (book.price * book.units), 0);
-      let totalPrice = totalBooksPrice + order.shippingCost;
-      
-      mg.messages.create("sandbox4ddb2b71136e40558a9d61263b7f8bdb.mailgun.org", {
-      from: "Mailgun Sandbox <postmaster@sandbox4ddb2b71136e40558a9d61263b7f8bdb.mailgun.org>",
-      to: ["preinaj@gmail.com"], // Cambiar a peticion de back
-      subject: "Inicio de pedido",
-      text: `Se ha creado con exito su pedido con un valor de ${totalPrice}€ el dia ${order.creationDatetime}`,
-    }).then(msg => console.log(msg)).catch(err => console.log(err)); // logs any error`;
     }
   } catch (error) {
     if (!res.headersSent) {
