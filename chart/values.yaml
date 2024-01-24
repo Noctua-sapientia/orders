@@ -1,0 +1,4 @@
+orders:
+  replicaCount: 1
+
+ordersMongoUrl: mongodb://mongo/test

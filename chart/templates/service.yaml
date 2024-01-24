@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders
+  labels:
+    {{- include "orders.labels" . | nindent 4}}
+  annotations:
+    dev.okteto.com/auto-ingress: "true"
+spec:
+  selector:
+    app.kubernetes.io/name: orders
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  type: ClusterIP
+  ports:
+    - targetPort: 4003
+      protocol: TCP
+      name: http
+      port: 4003
