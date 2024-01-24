@@ -9,15 +9,98 @@ const axios = require('axios');
 const formData = require('form-data');
 const Mailgun = require('mailgun.js');
 
-MAILGUN_API_KEY = "b23691a9fd654459f36203bc86f00ae8-063062da-9fab57db";
 
+
+// Funciones auxiliares envio de email
+MAILGUN_API_KEY = "TOKEN_DE_MAIL_GUN";
 const mailgun = new Mailgun(formData);
 const mg = mailgun.client({
 	username: 'api',
 	key: MAILGUN_API_KEY,
 });
 
+
 router.use(cors());
+
+
+// --------------- Generate invoice -------------------
+
+// router.get('/generateInvoice', async function(req, res, next) {
+
+//   // Check if required fields are provided
+//   if (!(req.body.orderId && req.body.user && req.body.seller && req.body.deliveryAddress 
+//     && req.body.creationDatetime
+//     && req.body.shippingCost && req.body.subtotal && req.body.total)) {
+//     console.log("Error fields");
+//     return res.status(400).send({ error: "Could not generate invoice. Missing fields." });
+//   }
+
+//   const dropboxFilePath = `/invoice${req.body.orderId}.pdf`;
+//   const html = `
+//     <html>
+//         <head>
+//             <title>Factura</title>
+//         </head>
+//         <body>
+//             <h1>Factura de compra</h1>
+//             <p>Identificador del pedido: ${req.body.orderId}</p>
+//             <p>Vendedor: ${req.body.seller}</p>
+//             <p>Comprador: ${req.body.user}</p>
+//             <p>Fecha de compra: ${req.body.creationDatetime}</p>
+//             <p>Direccion de entrega: ${req.body.deliveryAddress}</p>
+//             <p>Coste de envio: ${req.body.shippingCost} €</p>
+//             <p>Subtotal: ${req.body.subtotal} €</p>
+//             <p>Total: ${req.body.total} €</p>
+//         </body>
+//     </html>`; // Asegúrate de cerrar la etiqueta </html>
+
+//   try {
+//     // Crear PDF con Puppeteer
+//     const browser = await puppeteer.launch();
+//     const page = await browser.newPage();
+//     await page.setContent(html);
+//     const pdfBuffer = await page.pdf(); // Genera el PDF 
+//     await browser.close();
+
+//     // Subir el PDF a Dropbox
+//     const DROPBOX_KEY = '7i3bups8si6bmzs';
+//     const DROPBOX_SECRET = 'mgvc0nzwey92gwl';
+//     const refreshToken = 'IkpIndctV_4AAAAAAAAAAYDpLYO4t940iPXSU77Y6vK80xcNzdEY1r24xIFY5esg';
+
+//     const dbx = new Dropbox({ 
+//       clientId: DROPBOX_KEY,
+//       clientSecret: DROPBOX_SECRET,
+//       refreshToken: refreshToken
+//     });
+
+//     await dbx.filesUpload({
+//         path: dropboxFilePath,
+//         contents: pdfBuffer,
+//         mode: { '.tag': 'overwrite' }
+//     });        
+//     console.log('PDF uploaded to Dropbox successfully!');
+
+//     let sharedLinkResponse = await dbx.sharingListSharedLinks({ path: dropboxFilePath });
+//     let sharedLinks = sharedLinkResponse.result.links;
+
+//     if (!sharedLinks || sharedLinks.length === 0) {
+//         sharedLinkResponse = await dbx.sharingCreateSharedLinkWithSettings({ path: dropboxFilePath });
+//         sharedLinks = [sharedLinkResponse.result];
+//     }
+
+//     if (sharedLinks && sharedLinks.length > 0) {
+//       console.log('Shared Link:', sharedLinks[0].url);
+//       return res.status(200).send({ url: sharedLinks[0].url });
+//     } else {
+//         console.log('No se pudo obtener ni crear un enlace compartido.');
+//         return res.status(500).send({ error: 'No se pudo obtener ni crear un enlace compartido.' });
+//     }
+//   } catch (error) {
+//       console.error('Error en el proceso con Dropbox:', error);
+//       return res.status(500).send({ error: 'Error en el proceso con Dropbox' });
+//   }
+// });
+
 
 // ---------------- GET -----------------------
 // GET /orders :: Gives all books and allows to filter with certain criteria
@@ -328,15 +411,16 @@ router.get('/:orderId', verificarToken, async function(req, res, next) {
 *         description: Database error.
 */
 router.post('/', verificarToken, async function(req, res, next) {
-
   // Check if required fields are provided
   if (!(req.body.userId && req.body.sellerId && req.body.books && req.body.deliveryAddress && req.body.shippingCost)) {
+    console.log("Error fields");
     return res.status(400).send({ error: "Order not posted. Missing required fields" });
   }
 
 
   // Check if all the books fields are provided
   if (!(req.body.books.every(book => book.bookId && book.units && book.price))) {
+    console.log("Error books");
     return res.status(400).send({ error: "Order not posted. Missing required fields in books" });
   }
 
@@ -361,6 +445,7 @@ router.post('/', verificarToken, async function(req, res, next) {
   order.updateDatetime = new Date().toISOString();  // Add updateDatetime
 
   if (!check_date_format(req.body.maxDeliveryDate)) {
+    console.log("Error date");
     return res.status(400).send({error: 'Order not posted. Invalid date format (format: YYYY-MM-DD)'});
   }
   order.maxDeliveryDate = new Date(req.body.maxDeliveryDate);  // Add maxDeliveryDate
@@ -380,20 +465,25 @@ router.post('/', verificarToken, async function(req, res, next) {
         headers: headers,
       };
 
+      // Update stock of books
       for (const book of req.body.books) {
         let response = await axios.put(`http://localhost:4002/api/v1/books/${book.bookId}/${order.sellerId}/stock`, 
                         { units: -book.units }, 
                         config);
       }
 
+      // Send email
       let totalBooksPrice = order.books.reduce((sum, book) => sum + (book.price * book.units), 0);
       let totalPrice = totalBooksPrice + order.shippingCost;
-      
-      mg.messages.create("sandbox4ddb2b71136e40558a9d61263b7f8bdb.mailgun.org", {
-      from: "Mailgun Sandbox <postmaster@sandbox4ddb2b71136e40558a9d61263b7f8bdb.mailgun.org>",
-      to: ["preinaj@gmail.com"], // Cambiar a peticion de back
+      let response = await axios.get(`http://localhost:4001/api/v1/customers/${order.userId}`, config);
+      let customer = response.data;
+
+      mg.messages.create("sandbox9644c07ab97248e4b758caaac87f97eb.mailgun.org", {
+      from: "Mailgun Sandbox <postmaster@sandbox9644c07ab97248e4b758caaac87f97eb.mailgun.org>",
+      to: [customer.email], // Cambiar a peticion de back
       subject: "Inicio de pedido",
       text: `Se ha creado con exito su pedido con un valor de ${totalPrice}€ el dia ${order.creationDatetime}`,
+
     }).then(msg => console.log(msg)).catch(err => console.log(err)); // logs any error`;
     }
   } catch (error) {
