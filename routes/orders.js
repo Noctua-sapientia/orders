@@ -6,6 +6,16 @@ const verificarToken = require('./verificarToken');
 const cors = require('cors');
 const axios = require('axios');
 
+const { Dropbox } = require('dropbox');
+const puppeteer = require('puppeteer');
+const fs = require('fs');
+const querystring = require('querystring');
+
+const DROPBOX_KEY = 'API_KEY_DROPBOX_INSERTAR';
+const DROPBOX_SECRET = 'API_SECRET_DROPBOX_INSERTAR';
+const refreshToken = 'REFRESH_TOKEN_DROPBOX_INSERTAR';
+
+
 router.use(cors());
 
 // ---------------- GET -----------------------
@@ -826,6 +836,82 @@ router.delete('/:orderId', verificarToken, async function(req, res, next) {
     return res.status(500).send({ error: 'Database error.' });
   }
 });
+
+
+// --------------- Generate invoice -------------------
+
+router.get('/generateInvoice', async function(req, res, next) {
+
+  // Check if required fields are provided
+  if (!(req.body.orderId && req.body.user && req.body.seller && req.body.deliveryAddress 
+    && req.body.creationDatetime
+    && req.body.shippingCost && req.body.subtotal && req.body.total)) {
+    console.log("Error fields");
+    return res.status(400).send({ error: "Could not generate invoice. Missing fields." });
+  }
+
+  const dropboxFilePath = `/invoice${req.body.orderId}.pdf`;
+  const html = `
+    <html>
+        <head>
+            <title>Factura</title>
+        </head>
+        <body>
+            <h1>Factura de compra</h1>
+            <p>Identificador del pedido: ${req.body.orderId}</p>
+            <p>Vendedor: ${req.body.seller}</p>
+            <p>Comprador: ${req.body.user}</p>
+            <p>Fecha de compra: ${req.body.creationDatetime}</p>
+            <p>Direccion de entrega: ${req.body.deliveryAddress}</p>
+            <p>Coste de envio: ${req.body.shippingCost} €</p>
+            <p>Subtotal: ${req.body.subtotal} €</p>
+            <p>Total: ${req.body.total} €</p>
+        </body>
+    </html>`; // Asegúrate de cerrar la etiqueta </html>
+
+  try {
+    // Crear PDF con Puppeteer
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    await page.setContent(html);
+    const pdfBuffer = await page.pdf(); // Genera el PDF 
+    await browser.close();
+
+    // Subir el PDF a Dropbox
+    const dbx = new Dropbox({ 
+      clientId: DROPBOX_KEY,
+      clientSecret: DROPBOX_SECRET,
+      refreshToken: refreshToken
+    });
+
+    await dbx.filesUpload({
+        path: dropboxFilePath,
+        contents: pdfBuffer,
+        mode: { '.tag': 'overwrite' }
+    });        
+    console.log('PDF uploaded to Dropbox successfully!');
+
+    let sharedLinkResponse = await dbx.sharingListSharedLinks({ path: dropboxFilePath });
+    let sharedLinks = sharedLinkResponse.result.links;
+
+    if (!sharedLinks || sharedLinks.length === 0) {
+        sharedLinkResponse = await dbx.sharingCreateSharedLinkWithSettings({ path: dropboxFilePath });
+        sharedLinks = [sharedLinkResponse.result];
+    }
+
+    if (sharedLinks && sharedLinks.length > 0) {
+      console.log('Shared Link:', sharedLinks[0].url);
+      return res.status(200).send({ url: sharedLinks[0].url });
+    } else {
+        console.log('No se pudo obtener ni crear un enlace compartido.');
+        return res.status(500).send({ error: 'No se pudo obtener ni crear un enlace compartido.' });
+    }
+  } catch (error) {
+      console.error('Error en el proceso con Dropbox:', error);
+      return res.status(500).send({ error: 'Error en el proceso con Dropbox' });
+  }
+});
+
 
 
 // ---------------- AUXILIARY FUNCTIONS -----------------------
